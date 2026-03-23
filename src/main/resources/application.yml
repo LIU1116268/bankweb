@@ -1,0 +1,27 @@
+server:
+  port: 8080
+spring:
+  #数据库链接信息
+  datasource:
+    url: jdbc:mysql://localhost:3306/bank
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: 1234  #YOUR_PASSWORD
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password:  #YOUR_PASSWORD
+  servlet:
+    multipart:
+      max-file-size: 10MB  # 单个文件大小
+      max-request-size: 50MB
+
+file:
+  upload-path: ./uploads/
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    # 增加 SQL 日志
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
