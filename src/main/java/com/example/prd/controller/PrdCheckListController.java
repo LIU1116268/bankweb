@@ -69,7 +69,7 @@ public class PrdCheckListController {
                        @RequestParam(defaultValue = "5") int size,
                        @RequestParam(required = false) String demandName,
                        @RequestParam(required = false) Long deptId,
-                       @RequestParam(defaultValue = "true") boolean recursive) { // 新增：是否递归
+                       @RequestParam(defaultValue = "true") boolean recursive) { //是否递归
         return Result.success(prdService.selectCustomPage(current, size, demandName, deptId, recursive));
     }
 
@@ -95,9 +95,12 @@ public class PrdCheckListController {
      */
     @Log(title = "文件上传", businessType = "UPLOAD")
     @PostMapping("/upload")
-    public Result upload(@RequestParam("files") MultipartFile[] files) {
+    // @RequestParam("files") 去前端找名叫 files 的参数
+    // MultipartFile[] getfiles 后端用数组接收
+    // 前端传过来一组名叫 files 的文件 → 后端用数组接收
+    public Result upload(@RequestParam("files") MultipartFile[] getfiles) {
         try {
-            String pathString = prdService.uploadFiles(files);
+            String pathString = prdService.uploadFiles(getfiles);
             return Result.success(pathString);
         } catch (Exception e) {
             return Result.error("文件上传失败：" + e.getMessage());

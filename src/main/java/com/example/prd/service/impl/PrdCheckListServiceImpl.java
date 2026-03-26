@@ -66,10 +66,7 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
         return prdMapper.selectByPrimaryKey(id);
     }
 
-    @Override
-    public List<PrdCheckList> listByWindowId(String windowVerId) {
-        return prdMapper.selectByWindowId(windowVerId);
-    }
+
 
     /**
      * 多文件异步上传逻辑
@@ -258,9 +255,7 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
     public List<PrdCheckList> selectCustomPage(int current, int size, String demandName, Long deptId, boolean recursive) {
         // 计算 SQL 的 LIMIT 偏移量
         long offset = (long) (current - 1) * size;
-
         List<Long> deptIds = null;
-
         if (deptId != null) {
             if (recursive) {
                 // 【加速点】：这里调用的 selectChildrenIds 内部已经实现了 Redis 缓存

@@ -22,6 +22,7 @@ public interface PrdCheckListMapper extends BaseMapper<PrdCheckList> {
     @Insert("<script>" +
             "INSERT INTO prd_check_list " +
             "<trim prefix='(' suffix=')' suffixOverrides=','> " +
+            // 先判断是否为空
             "  <if test='id != null'>ID,</if> " +
             "  <if test='windowVerId != null'>WINDOW_VER_ID,</if> " +
             "  <if test='demandName != null'>DEMAND_NAME,</if> " +
@@ -38,6 +39,7 @@ public interface PrdCheckListMapper extends BaseMapper<PrdCheckList> {
             "  <if test='createUser != null'>CREATE_USER,</if> " +
             "  CREATE_TIME " +
             "</trim> " +
+            // 传入值
             "<trim prefix='VALUES (' suffix=')' suffixOverrides=','> " +
             "  <if test='id != null'>#{id},</if> " +
             "  <if test='windowVerId != null'>#{windowVerId},</if> " +
@@ -117,21 +119,44 @@ public interface PrdCheckListMapper extends BaseMapper<PrdCheckList> {
      * 2. LIKE CONCAT：数据库无关的模糊查询拼接方式。
      * 3. LIMIT：手动分页实现，offset 为跳过的记录数，limit 为查询条数。
      */
-    @Select("<script> " +
+    @Select(
+            // 动态sql说明
+            "<script> " +
+            // 1. 基础SQL：从 prd_check_list 表里查所有字段
             "SELECT * FROM prd_check_list " +
+            // 2. 动态条件标签：自动帮我处理 WHERE 和多余的 AND，不会报错
             "<where> " +
+
+            // ======================================
+            // 条件1：如果 需求名称 不为空，就按名称模糊查询
+            // ======================================
             "  <if test='demandName != null and demandName != \"\"'> " +
             "    AND DEMAND_NAME LIKE CONCAT('%', #{demandName}, '%') " +
             "  </if> " +
+            // ======================================
+            // 条件2：如果 部门ID列表 不为空，就按部门 IN 查询
+            // ======================================
             "  <if test='deptIds != null and deptIds.size() > 0'> " +
             "    AND DEPT_ID IN " +
-            "    <foreach collection='deptIds' item='id' open='(' separator=',' close=')'> " +
-            "      #{id} " +
-            "    </foreach> " +
+
+            // 循环标签：把 List<Long> 变成 (1,2,3) 这种格式
+            "<foreach " +
+            "collection='deptIds' " +   // 要循环的集合
+            "item='id' " +               // 每次循环的变量名
+            "open='(' " +                // 开头加 (
+            "separator=',' " +           // 中间加 ,
+            "close=')'> " +             // 结尾加 )
+            "      #{id} " +            // 填入每个id
+            "</foreach> " +
+
             "  </if> " +
+
             "</where> " +
+            // 3. 排序：按创建时间 最新的排在前面
             "ORDER BY CREATE_TIME DESC " +
+            // 4. 分页：offset = 从第几条开始查；limit = 查多少条
             "LIMIT #{offset}, #{limit} " +
+
             "</script>")
     @ResultMap("PrdMap")
     List<PrdCheckList> selectByCondition(@Param("demandName") String demandName,
@@ -155,12 +180,7 @@ public interface PrdCheckListMapper extends BaseMapper<PrdCheckList> {
     @ResultMap("PrdMap")
     List<PrdCheckList> selectAll(@Param("demandName") String demandName);
 
-    /**
-     * 根据版本 ID 查询关联清单
-     */
-    @Select("SELECT * FROM prd_check_list WHERE WINDOW_VER_ID = #{windowVerId}")
-    @ResultMap("PrdMap")
-    List<PrdCheckList> selectByWindowId(String windowVerId);
+
 
 
 }

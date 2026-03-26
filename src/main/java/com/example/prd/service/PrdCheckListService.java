@@ -17,8 +17,7 @@ public interface PrdCheckListService {
     // 根据 ID 获取详情
     PrdCheckList getById(String id);
 
-    // 根据版本号查询
-    List<PrdCheckList> listByWindowId(String windowVerId);
+
 
     String uploadFiles(MultipartFile[] files) throws IOException;
 

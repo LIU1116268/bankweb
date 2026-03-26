@@ -31,15 +31,15 @@ public class SysDeptServiceImpl implements SysDeptService {
     }
 
     @Override
+    // 一整棵完整的部门树的键bankweb:dept:tree
     public List<SysDept> buildDeptTree(List<SysDept> depts) {
-        // 1. 尝试从缓存获取
         List<SysDept> cachedTree = (List<SysDept>) redisTemplate.opsForValue().get(CACHE_KEY_TREE);
         if (cachedTree != null) {
             return cachedTree;
         }
-
         // 2. 缓存没有，执行原有递归构建逻辑
-        List<SysDept> tree = depts.stream()
+        List<SysDept> tree = depts.stream() // 把（所有部门）变成 流水线
+                // 只挑出那些没有上级（parentId 为 0）的顶级部门
                 .filter(d -> d.getParentId() == 0)
                 .map(d -> {
                     d.setChildren(getChildren(d, depts));
@@ -51,27 +51,6 @@ public class SysDeptServiceImpl implements SysDeptService {
         return tree;
     }
 
-    @Override
-    public List<Long> selectChildrenIds(Long deptId) {
-        String key = "bankweb:dept:childrenIds:" + deptId;
-
-        // 1. 先去 Redis 拿
-        List<Long> cachedIds = (List<Long>) redisTemplate.opsForValue().get(key);
-        if (cachedIds != null) {
-            return cachedIds; // 命中缓存，直接返回，毫秒级响应
-        }
-
-        // 2. 缓存没中，再算递归
-        List<Long> ids = new ArrayList<>();
-        List<SysDept> all = deptMapper.selectDeptList(new SysDept());
-        ids.add(deptId);
-        fillChildIds(all, ids, deptId); // 递归算法
-
-        // 3. 存入 Redis，设置过期时间
-        redisTemplate.opsForValue().set(key, ids, 24, TimeUnit.HOURS);
-
-        return ids;
-    }
 
     @Override
     public void clearDeptCache() {
@@ -98,8 +77,34 @@ public class SysDeptServiceImpl implements SysDeptService {
                 .filter(d -> d.getParentId().equals(parent.getDeptId()))
                 .map(d -> {
                     d.setChildren(getChildren(d, all));
-                    return d;
+                    return d;// filter map 同时执行
                 }).collect(Collectors.toList());
+    }
+
+
+    @Override
+    public List<Long> selectChildrenIds(Long deptId) {
+        String key = "bankweb:dept:childrenIds:" + deptId;// 每个部门key不同
+
+        // 1. 先去 Redis 拿
+        // 当前部门自己的 ID + 所有下级子部门、孙部门的 ID 列表
+        List<Long> cachedIds = (List<Long>) redisTemplate.opsForValue().get(key);
+        if (cachedIds != null) {
+            return cachedIds;
+        }
+        // 2. 缓存没中，再算递归
+        // 定义结果列表
+        List<Long> ids = new ArrayList<>();
+        // 获取数据库里的【所有部门】的完整列表
+        List<SysDept> all = deptMapper.selectDeptList(new SysDept());
+        // 先放入第一级父id
+        ids.add(deptId);
+        fillChildIds(all, ids, deptId); // 递归算法
+
+        // 3. 存入 Redis，设置过期时间
+        redisTemplate.opsForValue().set(key, ids, 24, TimeUnit.HOURS);
+
+        return ids;
     }
 
     private void fillChildIds(List<SysDept> all, List<Long> ids, Long parentId) {

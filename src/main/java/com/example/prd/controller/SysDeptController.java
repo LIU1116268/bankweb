@@ -26,6 +26,12 @@ public class SysDeptController {
 
 
     /**
+     * http://localhost:8080/system/dept/add
+     *{
+     *     "deptName": "科华支行",
+     *     "parentId": 105, //
+     *     "orderNum": 1
+     * }
      * 保存部门信息并更新缓存
      * 1. 数据持久化到 MySQL 数据库，保证数据安全可靠
      * 2. 删除 Redis 缓存，而非直接更新缓存

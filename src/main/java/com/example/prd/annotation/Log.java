@@ -13,7 +13,6 @@ import java.lang.annotation.*;
 public @interface Log {
     /** 模块名称 */
     String title() default "";
-
     /** 业务操作类型 */
     String businessType() default "OTHER";
 }
