@@ -18,7 +18,8 @@ spring:
       max-request-size: 50MB
 
 file:
-  upload-path: ./uploads/
+  upload-path: D:/prd_attachments/
+  #不能能使用绝对路径，聚堆路径会按照Tomcat的路径开始，而不是自身项目路径
 
 mybatis-plus:
   configuration:
