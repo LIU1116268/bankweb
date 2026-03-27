@@ -20,40 +20,51 @@ public class ZipUtils {
     public static void downloadZip(List<File> files, HttpServletResponse response) throws IOException {
         // 1. 设置响应头：告诉浏览器，接下来的数据是一个 ZIP 压缩包
         response.setContentType("application/zip");
-
         // 2. 设置下载的文件名：告诉浏览器弹出下载框，默认文件名为 attachments.zip
+        // response.setHeader(参数1, 参数2); 往 HTTP 响应里添加一个头信息
+        // 参数 1：头的名称（固定的标准名字）参数 2：头的值（你自己设置）
+        //  第二个参数：Content-Disposition:内容处理方式——你收到的内容应该怎么处理是直接展示？还是弹出下载框？
+        // 第二个参数："attachment; filename=attachments.zip"这是两个值
+        // attachment = 作为附件下载 告诉浏览器：不要打开，不要预览，直接弹出下载框！
+        // 如果不写这个，浏览器可能会直接显示文件内容，而不是下载。
+        // filename=attachments.zip 设置下载时的默认文件名
         response.setHeader("Content-Disposition", "attachment; filename=attachments.zip");
 
         // 3. 开启压缩流：使用 try-with-resources 自动管理资源
         // ZipOutputStream 就像一个“自动封口的压缩纸箱”，数据丢进去就会被压缩
         try (ZipOutputStream zos = new ZipOutputStream(response.getOutputStream())) {
+            // 它在创建一个 “ZIP 压缩输出流” 对象：
+            // zosresponse.getOutputStream() 这是 浏览器的输出流
+            // 把数据写给浏览器 → 让浏览器下载
 
             // 4. 循环处理每一个文件
             for (File file : files) {
-                // 安全检查：如果硬盘上找不到这个文件，直接跳过，防止程序崩溃
                 if (!file.exists()) continue;
 
                 // 5. 在压缩包里“占个位置”：创建一个文件夹内部的条目 (Entry)
                 // file.getName() 会拿到带 10 位随机码的文件名，比如 "a1b2c3d4e5_11.sql"
                 zos.putNextEntry(new ZipEntry(file.getName()));
 
-                // 6. 读取硬盘文件：开启文件输入流，准备把硬盘里的字节搬运出来
-                try (FileInputStream fis = new FileInputStream(file)) {
+
+                try (FileInputStream fis = new FileInputStream(file)
+                     // 把硬盘上的文件，转换成一个文件输入流
+                ) {
                     // 准备一个 1KB 的小推车（缓冲区），分批搬运数据
                     byte[] buffer = new byte[1024];
+                    // 保存每次读到了多少字节
                     int len;
 
-                    // 7. 开始搬运：只要还没读完 (fis.read != -1)，就一直读
+                    // 开始搬运：只要还没读完,也就是len>0 (fis.read != -1)，就一直读
+                    // 从文件输入流里读数据 → 放进 buffer 数组里！
                     while ((len = fis.read(buffer)) > 0) {
-                        // 将读到的数据写进压缩流中
+                        // 将读到的数据写进输出压缩流中,0~len 规定长度
+                        // zos 这个压缩流，底层直接连到浏览器
                         zos.write(buffer, 0, len);
                     }
                 }
-
                 // 8. 结束当前文件的打包：关闭当前的 Entry，准备处理下一个文件
                 zos.closeEntry();
             }
-            // 循环结束后，try-with-resources 会自动关闭 zos，并完成压缩包的最后封包
         }
     }
 }

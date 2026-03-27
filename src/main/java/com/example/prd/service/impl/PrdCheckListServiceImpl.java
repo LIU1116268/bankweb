@@ -130,6 +130,7 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
 
         // 3. 路径合并逻辑（防止覆盖旧附件）
         String finalPath;
+        // 获取这个id之前的附件路径，可能有，也可能为空
         String oldPath = existRecord.getAttachmentPath();
 
         if (oldPath != null && !oldPath.trim().isEmpty()) {
@@ -141,11 +142,11 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
         }
 
         // 4. 执行数据库更新
-        PrdCheckList updateEntity = new PrdCheckList();
-        updateEntity.setId(id);
-        updateEntity.setAttachmentPath(finalPath);
-        // updateEntity.setUpdateUser("ADMIN"); // 建议记录更新人
+        PrdCheckList updateEntity = new PrdCheckList(); // 创建一个空壳，里面全是 null
+        updateEntity.setId(id); // 填上主键：定位到那一行
+        updateEntity.setAttachmentPath(finalPath); // 填上新内容：要把路径改成什么
 
+        // 调用mapper 中选择性更新的方法，因为save那要是输入对象
         int rows = prdMapper.updateByPrimaryKeySelective(updateEntity);
         if (rows <= 0) {
             throw new RuntimeException("数据库更新失败，请检查 ID 是否正确");
@@ -161,7 +162,6 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
         if (entity == null || entity.getAttachmentPath() == null || entity.getAttachmentPath().isEmpty()) {
             return true;
         }
-
         // 1. 物理删除磁盘文件
         String[] paths = entity.getAttachmentPath().split(",");
         for (String p : paths) {
@@ -177,6 +177,8 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
         updateNode.setAttachmentPath(""); // 置空
         return prdMapper.updateByPrimaryKeySelective(updateNode) > 0;
     }
+
+
     /**
      * 导出 Excel 报表
      * 使用 EasyExcel 框架，在流式写入前对数据库中的状态码（0/1）进行文字转换。
@@ -193,15 +195,18 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
         }
 
         // 3. 配置 HTTP 响应头（Excel 专用意图）
+        // 设置类型为 Excel
         response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
         response.setCharacterEncoding("utf-8");
+        // System.currentTimeMillis() 时间戳
         String fileName = "PRD_Export_" + System.currentTimeMillis() + ".xlsx";
+        // 告诉浏览器：下载，不要预览
         response.setHeader("Content-Disposition", "attachment; filename=" + fileName);
 
         // 4. 执行写入并关闭流
-        EasyExcel.write(response.getOutputStream(), PrdCheckList.class)
+        EasyExcel.write(response.getOutputStream(), PrdCheckList.class)// 用输出流写，模板是PrdCheckList
                 .sheet("PRD核对清单")
-                .doWrite(data);
+                .doWrite(data);  // 写入数据
     }
 
     /**

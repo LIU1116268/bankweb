@@ -109,7 +109,7 @@ public class PrdCheckListController {
 
     /**
      * 关联上传接口
-     * 请求示例：POST http://localhost:8080/prd/uploadbind?id=PCL2026031800000004
+     * 请求示例：POST http://localhost:8080/prd/uploadBind?id=PCL2026031800000004
      * 注意：需使用 multipart/form-data 格式发送文件
      * 适用于“对已有数据补录附件”。
      * http://localhost:8080/sysLog/list
@@ -117,7 +117,7 @@ public class PrdCheckListController {
     @Log(title = "关联附件上传", businessType = "UPLOADBIND")
     @PostMapping("/uploadBind")
     public Result upload(@RequestParam("files") MultipartFile[] files,
-                         @RequestParam("id") String id) { // 接收前端传来的 id
+                         @RequestParam("id") String id) {
         try {
             // 执行“上传+绑定”业务
             String finalPath = prdService.uploadAndBind(files, id);
@@ -131,6 +131,12 @@ public class PrdCheckListController {
         }
     }
 
+
+    /**
+     * 删除附件
+     * 请求方式：DELETE
+     * 测试 URL: http://localhost:8080/prd/deleteFile/PCL2026031800000004
+     */
     @Log(title = "删除附件", businessType = "DELETE")
     @DeleteMapping("/deleteFile/{id}")
     public Result deleteFile(@PathVariable String id) {
@@ -144,11 +150,14 @@ public class PrdCheckListController {
      * 注意：直接通过浏览器访问会触发文件下载。
      */
     @GetMapping("/exportZip")
-    public void export(@RequestParam List<String> ids, HttpServletResponse response) {
+    public void export(
+            @RequestParam List<String> ids, // 请求参数
+            HttpServletResponse response // 响应对象
+    ) {
         try {
             prdService.exportAttachmentsAsZip(ids, response);
         } catch (IOException e) {
-            // 异常通常在写入 Response 流时发生
+
             e.printStackTrace();
         }
     }
