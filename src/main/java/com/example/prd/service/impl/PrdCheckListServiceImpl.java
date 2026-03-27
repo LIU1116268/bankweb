@@ -38,9 +38,6 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
     @Autowired
     private PrdCheckListMapper prdMapper;
 
-    /**
-     * 从配置文件读取上传根路径，若未配置则默认为 D:/uploads/
-     */
     @Value("${file.upload-path:D:/uploads/}")
     private String uploadRootPath;
 
@@ -115,7 +112,6 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
     @Transactional(rollbackFor = Exception.class) // 事务管理：若数据库更新失败，可手动处理或回滚
     public String uploadAndBind(MultipartFile[] files, String id) throws IOException {
         // 1. 调用现有的 uploadFiles 方法处理物理文件存储
-        // 返回格式如：2026/xx/xx/uuid_a.pdf,2026/xx/xx/uuid_b.sql
         String newPaths = this.uploadFiles(files);
 
         if (newPaths == null || newPaths.isEmpty()) {

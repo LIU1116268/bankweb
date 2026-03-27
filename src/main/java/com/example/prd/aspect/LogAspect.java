@@ -68,28 +68,6 @@ public class LogAspect {
                              Object jsonResult)  // 入参3：方法返回值（异常时为null）
     {
         try {
-/*
-通过 Spring 工具类(RequestContextHolder)，强行拿到当前的 HTTP 请求。
-这样才能知道是哪个 IP、哪个 URL（比如 /add）在操作
-RequestContextHolder.getRequestAttributes()
-↓（返回父类：RequestAttributes）
-(ServletRequestAttributes)  ← 强转！
-          ↓
-attributes = {
-    request: HttpServletRequest  ← 里面装着完整请求信息
-    response: HttpServletResponse
-}
-          ↓
-attributes.getRequest()
-          ↓
-request = {
-    url: "/user/add",
-    ip: "192.168.1.100",
-    method: "POST",
-    header: "Bearer xxxx",
-    parameter: { "id":1, "name":"张三" }
-}
-             */
             ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
             if (attributes == null) return;
             HttpServletRequest request = attributes.getRequest();
@@ -123,21 +101,20 @@ request = {
             operLog.setTitle(log.title());
             operLog.setBusinessType(log.businessType());
 
-            // 5. 比如新增传入的json 还有执行完得到的json也放入实体
-            // 注意：这里需要 try-catch 防止 JSON 转换失败导致业务报错
+
             try {
-                // 1. 把【前端传的参数】转成 JSON字符串，存进日志
+                // 1. 把前端传的参数转成 JSON字符串，存进日志
                 operLog.setOperParam(JSON.toJSONString(joinPoint.getArgs()));
                 if (jsonResult != null) {
-                    // 2. 如果【接口有返回值】，也转成 JSON字符串，存进日志
+                    // 2. 如果接口有返回值，也转成 JSON字符串，存进日志
                     operLog.setJsonResult(JSON.toJSONString(jsonResult));
                 }
             } catch (Exception jsonEx) {
                 operLog.setOperParam("参数序列化失败");
             }
 
-            // 6. 调用异步 Service 落库
-            // 这体现了：切面只管组装数据，Service 只管存，异步不阻塞主线程
+
+            // 切面只管组装数据，Service 只管存，异步不阻塞主线程
             operLogService.insertOperLog(operLog);
 
         } catch (Exception ex) {

@@ -20,22 +20,9 @@ public class ZipUtils {
     public static void downloadZip(List<File> files, HttpServletResponse response) throws IOException {
         // 1. 设置响应头：告诉浏览器，接下来的数据是一个 ZIP 压缩包
         response.setContentType("application/zip");
-        // 2. 设置下载的文件名：告诉浏览器弹出下载框，默认文件名为 attachments.zip
-        // response.setHeader(参数1, 参数2); 往 HTTP 响应里添加一个头信息
-        // 参数 1：头的名称（固定的标准名字）参数 2：头的值（你自己设置）
-        //  第二个参数：Content-Disposition:内容处理方式——你收到的内容应该怎么处理是直接展示？还是弹出下载框？
-        // 第二个参数："attachment; filename=attachments.zip"这是两个值
-        // attachment = 作为附件下载 告诉浏览器：不要打开，不要预览，直接弹出下载框！
-        // 如果不写这个，浏览器可能会直接显示文件内容，而不是下载。
-        // filename=attachments.zip 设置下载时的默认文件名
-        response.setHeader("Content-Disposition", "attachment; filename=attachments.zip");
 
-        // 3. 开启压缩流：使用 try-with-resources 自动管理资源
-        // ZipOutputStream 就像一个“自动封口的压缩纸箱”，数据丢进去就会被压缩
+        response.setHeader("Content-Disposition", "attachment; filename=attachments.zip");
         try (ZipOutputStream zos = new ZipOutputStream(response.getOutputStream())) {
-            // 它在创建一个 “ZIP 压缩输出流” 对象：
-            // zosresponse.getOutputStream() 这是 浏览器的输出流
-            // 把数据写给浏览器 → 让浏览器下载
 
             // 4. 循环处理每一个文件
             for (File file : files) {
@@ -68,9 +55,3 @@ public class ZipUtils {
         }
     }
 }
-/**
- * 文件流式打包下载功能优势说明
- * 1. 即时打包传输：无需在服务器端生成临时 ZIP 文件，避免占用服务器磁盘空间，边压缩边响应输出
- * 2. 低内存占用：采用 1024 字节缓冲区逐块读写，无论文件大小，内存占用稳定且极小
- * 3. 多文件聚合下载：可自动聚合跨日期目录的分散文件，统一打包为一个 ZIP 包，提升用户下载体验与运维效率
- */

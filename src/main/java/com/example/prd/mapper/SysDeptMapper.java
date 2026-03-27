@@ -10,8 +10,7 @@ public interface SysDeptMapper extends BaseMapper<SysDept> {
 
     /**
      * 查询部门列表
-     * 修复提示：如果 IDE 报红，通常是因为它不认识 <script>。
-     * 实际上代码运行是没问题的，通过在方法上添加 @SuppressWarnings("SqlResolve") 来压制 IDE 报错。
+     *如果 IDE 报红，通常是因为它不认识 <script>。
      */
     @SuppressWarnings("SqlResolve")
     @Select("<script>" +

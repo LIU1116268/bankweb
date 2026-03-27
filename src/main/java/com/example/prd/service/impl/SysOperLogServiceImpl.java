@@ -38,9 +38,7 @@ public class SysOperLogServiceImpl implements SysOperLogService {
 
         // 1. 创建 QueryWrapper 查询条件构造器（用于拼接 SQL 查询条件）
         QueryWrapper<SysOperLog> queryWrapper = new QueryWrapper<>();
-        // 2. 拼接排序 + 限制条数：按操作时间倒序排序，只查询 50 条数据
         queryWrapper.orderByDesc("OPER_TIME").last("LIMIT 50");
-        // 3. 传入拼接好的查询条件，调用 BaseMapper 的 selectList 方法执行查询
         return operLogMapper.selectList(queryWrapper);
     }
 

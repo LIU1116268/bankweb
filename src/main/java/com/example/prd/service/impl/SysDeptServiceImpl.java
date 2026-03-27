@@ -54,9 +54,7 @@ public class SysDeptServiceImpl implements SysDeptService {
 
     @Override
     public void clearDeptCache() {
-        // 清理整棵树的缓存
         redisTemplate.delete(CACHE_KEY_TREE);
-        // 清理所有子部门集合缓存（匹配前缀）
         java.util.Set<String> keys = redisTemplate.keys(CACHE_KEY_CHILDREN + "*");
         if (keys != null) redisTemplate.delete(keys);
     }
@@ -95,7 +93,7 @@ public class SysDeptServiceImpl implements SysDeptService {
         // 2. 缓存没中，再算递归
         // 定义结果列表
         List<Long> ids = new ArrayList<>();
-        // 获取数据库里的【所有部门】的完整列表
+        // 获取数据库里的所有部门的完整列表
         List<SysDept> all = deptMapper.selectDeptList(new SysDept());
         // 先放入第一级父id
         ids.add(deptId);

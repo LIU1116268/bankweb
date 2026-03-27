@@ -17,7 +17,6 @@ public interface PrdCheckListMapper extends BaseMapper<PrdCheckList> {
      * 动态插入记录（Selective）：仅插入对象中非空的字段。
      * 1. 使用 <script> 以支持动态 SQL 标签。
      * 2. <trim> 标签用于自动处理 SQL 括号，并移除末尾多余的逗号（suffixOverrides）。
-     * 3. CREATE_TIME 默认调用数据库 NOW() 函数。
      */
     @Insert("<script>" +
             "INSERT INTO prd_check_list " +

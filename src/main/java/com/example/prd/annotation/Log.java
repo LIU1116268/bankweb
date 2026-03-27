@@ -11,8 +11,8 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME) // 运行时有效
 @Documented
 public @interface Log {
-    /** 模块名称 */
+
     String title() default "";
-    /** 业务操作类型 */
+
     String businessType() default "OTHER";
 }
