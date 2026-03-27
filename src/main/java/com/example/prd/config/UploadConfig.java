@@ -17,6 +17,6 @@ public class UploadConfig implements WebMvcConfigurer {
         // 这里的路径建议与 Controller 中的 uploadDir 保持一致
         // 注意：Windows 路径前需要加 file:///，Linux 直接加 file:
         registry.addResourceHandler("/files/**")
-                .addResourceLocations("file:///C:/uploads/prd/");
+                .addResourceLocations("file:///D:/prd_attachments/");
     }
 }
