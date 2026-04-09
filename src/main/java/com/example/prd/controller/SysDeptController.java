@@ -47,6 +47,7 @@ public class SysDeptController {
         Result result;
         int rows = deptService.insertDept(dept);
         if (rows > 0) {
+            // 新增了数据，就删除缓存
             deptService.clearDeptCache();
             result = Result.success();
         } else {

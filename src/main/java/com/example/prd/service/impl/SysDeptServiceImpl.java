@@ -27,6 +27,7 @@ public class SysDeptServiceImpl implements SysDeptService {
     // 定义锁的前缀
     private static final String LOCK_KEY_PREFIX = "bankweb:lock:";
 
+    // 获取整个部门树结构
     @Override
     public List<SysDept> buildDeptTree(List<SysDept> depts) {
         // 1. 先尝试从缓存拿
@@ -35,14 +36,25 @@ public class SysDeptServiceImpl implements SysDeptService {
             return cachedTree;
         }
 
-        // 2. 缓存没有，准备加锁
+        // 2. 缓存没有，准备加锁,定义锁的名字,所有请求都抢这一把锁。
         String lockKey = LOCK_KEY_PREFIX + "tree";
+/*
+抢锁，锁有效期 10 秒，防止死锁（锁永远留在 Redis 里 → 后面所有线程永远抢不到锁 → 整个功能卡死）
+线程 A（第一个跑到的）
+setIfAbsent(lockKey) → 锁不存在
+→ 设置成功
+→ isLock = true
+→ 进入 if 里面
+→ 去查库、构建树
+→ 剩下的就只能等待
+10s后锁过期了 → A业务还没跑完 → 锁被别人抢走 → 并发问题又来了
+使用 Redisson 分布式锁，它自带看门狗机制，会自动给锁续期，只要线程没跑完，锁就不会过期，保证安全。
+*/
         try {
-            // 尝试加锁，有效期 10 秒，防止死锁
             Boolean isLock = redisTemplate.opsForValue().setIfAbsent(lockKey, "1", 10, TimeUnit.SECONDS);
-
             if (Boolean.TRUE.equals(isLock)) {
-                // 【关键：双重检查】拿到锁后再次确认缓存，防止重复计算
+                // 双重检查拿到锁后再次确认缓存，防止重复计算
+                // 第一个抢到锁的线程，可能已经把缓存重建完了。后面抢到的线程就不要再构建了
                 cachedTree = (List<SysDept>) redisTemplate.opsForValue().get(CACHE_KEY_TREE);
                 if (cachedTree != null) return cachedTree;
 
@@ -66,11 +78,12 @@ public class SysDeptServiceImpl implements SysDeptService {
             Thread.currentThread().interrupt();
             return new ArrayList<>();
         } finally {
-            // 释放锁
+            // A 线程执行完后释放锁
             redisTemplate.delete(lockKey);
         }
     }
 
+    // 查询出当前部门下的子部门 返回的列表
     @Override
     public List<Long> selectChildrenIds(Long deptId) {
         String cacheKey = CACHE_KEY_CHILDREN + deptId;
@@ -89,10 +102,12 @@ public class SysDeptServiceImpl implements SysDeptService {
                 cachedIds = (List<Long>) redisTemplate.opsForValue().get(cacheKey);
                 if (cachedIds != null) return cachedIds;
 
-                // 执行计算逻辑
+                // 执行递归逻辑 列表
                 List<Long> ids = new ArrayList<>();
                 List<SysDept> all = deptMapper.selectDeptList(new SysDept());
+                // 先把父部门id作为列表第一个
                 ids.add(deptId);
+                // 挨个遍历all 如果里面的元素的父id==当前deptId的，就放入结果列表，然后递归调用，放入的在作为父id
                 fillChildIds(all, ids, deptId);
 
                 // 存入缓存
@@ -104,6 +119,7 @@ public class SysDeptServiceImpl implements SysDeptService {
                 return selectChildrenIds(deptId);
             }
         } catch (InterruptedException e) {
+            // 凡是会让线程等待的方法，都必须捕获或抛出中断异常。
             Thread.currentThread().interrupt();
             return new ArrayList<>();
         } finally {
@@ -112,7 +128,6 @@ public class SysDeptServiceImpl implements SysDeptService {
     }
 
     // --- 辅助方法---
-
     private List<SysDept> getChildren(SysDept parent, List<SysDept> all) {
         return all.stream()
                 .filter(d -> d.getParentId().equals(parent.getDeptId()))

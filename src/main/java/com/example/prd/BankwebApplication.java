@@ -5,6 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.context.annotation.EnableAspectJAutoProxy;
 
+
 @EnableAsync
 @EnableAspectJAutoProxy
 @SpringBootApplication

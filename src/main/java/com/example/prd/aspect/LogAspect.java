@@ -33,28 +33,23 @@ public class LogAspect {
     @Autowired
     private SysOperLogService operLogService; // 注入日志服务，最后要把笔记存进数据库
 
-    // 配置织入点：监听所有加了 @Log 注解的方法
-    // 监控范围
+    // 配置织入点：监听所有加了 @Log 注解的方法，
+    // 只要加了 @Log 的方法，执行完 或 报错，就自动记录日志到数据库。
+    // 所以我这个切片类的名字可以随便叫，因为这设置他只跟Log关联
     @Pointcut("@annotation(com.example.prd.annotation.Log)")
-    public void logPointCut() {
-    }
+    public void logPointCut() {}
 
     /**
      * 处理完请求后执行（正常执行）
      */
     @AfterReturning(
             pointcut = "logPointCut()",  // 切点：哪些方法需要拦截
-            returning = "jsonResult"  // 把方法返回值绑定到变量 jsonResult
+            returning = "jsonResult"  // 把方法返回的结果，取名叫jsonResult
     )
     public void doAfterReturning(JoinPoint joinPoint, // 代表当前被拦截的方法信息
-                                 Object jsonResult // 统一处理日志
-    ) {
-        handleLog(joinPoint,//有连接点信息
-                null,
-                jsonResult //有返回结果
-        );
-    }
-
+                                 Object jsonResult ){// 方法返回的值jsonResult（比如返回列表、返回对象）
+            handleLog(joinPoint,null,jsonResult);
+        }
     /**
      * 拦截异常操作
      */
@@ -68,14 +63,15 @@ public class LogAspect {
                              Object jsonResult)  // 入参3：方法返回值（异常时为null）
     {
         try {
+            // 1. Spring 给每个请求开了一个小抽屉，这里面放着 request。请求上下文
             ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
             if (attributes == null) return;
+            // 从刚才拿到的 “请求抽屉” 里，把真正的请求对象取出来方进request。请求对象
             HttpServletRequest request = attributes.getRequest();
 
-            // 2. 通过joinPoint获取方法上的注解信息
-            // 获取这个方法的签名即签名 = 方法的基本信息摘要
+            // 2. 通过joinPoint获取方法，再从方法上获得注解信息
             MethodSignature signature = (MethodSignature) joinPoint.getSignature();
-            Method method = signature.getMethod();//【完整的方法对象】，整个save内容
+            Method method = signature.getMethod();//完整的方法对象，整个save内容
             Log log = method.getAnnotation(Log.class);// 把贴在上面的 @Log 注解撕下来
 
             if (log == null) return;
@@ -86,27 +82,26 @@ public class LogAspect {
             operLog.setOperTime(new Date());
             operLog.setOperUrl(request.getRequestURI());
             operLog.setOperUser("SYSTEM_USER"); // 实际可从 SecurityContext 获取
-            // 记录异常信息
+
             if (e != null) {
                 operLog.setStatus(1);// 出现异常，就又把状态置1
                 operLog.setErrorMsg(e.getMessage());
             }
             // 4. 设置类名与方法名
-            // com.example.prd.controller.CheckListController
+            // com.example.prd.controller.CheckListController  类名
             String className = joinPoint.getTarget().getClass().getName();
-            // save
+            // save 方法名
             String methodName = joinPoint.getSignature().getName();
-            // Method=com.example.prd.controller.PrdCheckListController.save()
             operLog.setMethod(className + "." + methodName + "()");
             operLog.setTitle(log.title());
             operLog.setBusinessType(log.businessType());
 
-
+            // 5. 获取请求的参数，并设置到操作日志中
             try {
-                // 1. 把前端传的参数转成 JSON字符串，存进日志
+                // 5.1. 把前端传的参数转成 JSON字符串，存进日志
                 operLog.setOperParam(JSON.toJSONString(joinPoint.getArgs()));
                 if (jsonResult != null) {
-                    // 2. 如果接口有返回值，也转成 JSON字符串，存进日志
+                    // 5.2. 如果接口有返回值，也转成 JSON字符串，存进日志
                     operLog.setJsonResult(JSON.toJSONString(jsonResult));
                 }
             } catch (Exception jsonEx) {
@@ -118,7 +113,7 @@ public class LogAspect {
             operLogService.insertOperLog(operLog);
 
         } catch (Exception ex) {
-            // 规范：日志功能的异常绝对不能影响正常业务逻辑
+            // 日志功能的异常绝对不能影响正常业务逻辑
             ex.printStackTrace();
         }
     }

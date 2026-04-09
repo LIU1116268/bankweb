@@ -51,6 +51,16 @@ public class PrdCheckListController {
     }
 
     /**
+     * 根据主键 ID 获取详情
+     * 请求方式：GET
+     * 测试 http://localhost:8080/prd/detail/PCL2026031800000003
+     */
+    @GetMapping("/detail/{id}")
+    public Result detail(@PathVariable String id) {
+        return Result.success(prdService.getById(id));
+    }
+
+    /**
      * 分页查询列表（支持按需求名称模糊搜索）
      * 请求方式：GET
      * 测试示例：
@@ -68,30 +78,20 @@ public class PrdCheckListController {
     public Result list(@RequestParam(defaultValue = "1") int current,
                        @RequestParam(defaultValue = "5") int size,
                        @RequestParam(required = false) String demandName,
-                       @RequestParam(required = false) Long deptId,
-                       @RequestParam(defaultValue = "true") boolean recursive) { //是否递归
+                       @RequestParam(required = false) Long deptId,// 查询相关部门
+                       @RequestParam(defaultValue = "true") boolean recursive) { //是否需要部门递归
         return Result.success(prdService.selectCustomPage(current, size, demandName, deptId, recursive));
     }
 
-    /**
-     * 根据主键 ID 获取详情
-     * 请求方式：GET
-     * 测试 http://localhost:8080/prd/detail/PCL2026031800000003
-     */
-    @GetMapping("/detail/{id}")
-    public Result detail(@PathVariable String id) {
-        return Result.success(prdService.getById(id));
-    }
 
 
     /**
      * 多文件上传接口
-     * 请求方式：POST (Content-Type: multipart/form-data),在api里面选择
+     * 请求方式：POST (body/form-data),在api里面选择
      * 参数名：files (可选择多个文件同步上传)
      * 参数类型file
      * 返回值：成功后返回在服务器存储的相对路径字符串（逗号分隔）
-     * upload-path: D:/prd_attachments/  # 上传文件存放的根路径
-     * 先上传、后提交，根据上传返回到路径填写表格数据
+     * upload-path: D:/prd_attachments/ 上传文件存放的根路径
      */
     @Log(title = "文件上传", businessType = "UPLOAD")
     @PostMapping("/upload")
@@ -157,7 +157,6 @@ public class PrdCheckListController {
         try {
             prdService.exportAttachmentsAsZip(ids, response);
         } catch (IOException e) {
-
             e.printStackTrace();
         }
     }
@@ -167,6 +166,8 @@ public class PrdCheckListController {
      * 请求方式：GET
      * 测试 URL: http://localhost:8080/prd/exportExcel?demandName=测算需求
      * 说明：如果不传 demandName，则导出全量数据。
+     * HttpServletResponse、HttpServletRequest
+     * 写在参数里，Spring 就自动给
      */
     @GetMapping("/exportExcel")
     public void exportExcel(@RequestParam(required = false) String demandName, HttpServletResponse response) {

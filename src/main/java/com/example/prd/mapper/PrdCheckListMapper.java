@@ -17,11 +17,14 @@ public interface PrdCheckListMapper extends BaseMapper<PrdCheckList> {
      * 动态插入记录（Selective）：仅插入对象中非空的字段。
      * 1. 使用 <script> 以支持动态 SQL 标签。
      * 2. <trim> 标签用于自动处理 SQL 括号，并移除末尾多余的逗号（suffixOverrides）。
+     * 3. MyBatis 动态 SQL 的 <if> 判断，
+     * 4. insert into table_name (column1, column2, ...) values (value1, value2, ...)
+     * column1, column2, ... 是根据传入的对象属性动态生成的。可有可无
+     * value1, value2, ... 是根据传入的对象属性动态生成的。可有可无
      */
     @Insert("<script>" +
             "INSERT INTO prd_check_list " +
-            "<trim prefix='(' suffix=')' suffixOverrides=','> " +
-            // 先判断是否为空
+            "< trim prefix='(' suffix=')' suffixOverrides=',' > " +// 加前后缀，删逗号
             "  <if test='id != null'>ID,</if> " +
             "  <if test='windowVerId != null'>WINDOW_VER_ID,</if> " +
             "  <if test='demandName != null'>DEMAND_NAME,</if> " +
@@ -35,6 +38,7 @@ public interface PrdCheckListMapper extends BaseMapper<PrdCheckList> {
             "  <if test='prodEnvCheck != null'>PROD_ENV_CHECK,</if> " +
             "  <if test='remark != null'>REMARK,</if> " +
             "  <if test='attachmentPath != null'>ATTACHMENT_PATH,</if> " +
+            // 如果 createUser 有值 → 把 CREATE_USER, 拼进 SQL  没值 → 这行直接消失
             "  <if test='createUser != null'>CREATE_USER,</if> " +
             "  CREATE_TIME " +
             "</trim> " +
@@ -53,6 +57,7 @@ public interface PrdCheckListMapper extends BaseMapper<PrdCheckList> {
             "  <if test='prodEnvCheck != null'>#{prodEnvCheck},</if> " +
             "  <if test='remark != null'>#{remark},</if> " +
             "  <if test='attachmentPath != null'>#{attachmentPath},</if> " +
+            // 有值 → 把 #{createUser}, 拼进去  没值 → 也消失
             "  <if test='createUser != null'>#{createUser},</if> " +
             "  NOW() " +
             "</trim> " +
@@ -61,7 +66,6 @@ public interface PrdCheckListMapper extends BaseMapper<PrdCheckList> {
 
     /**
      * 根据主键动态更新（Selective）：仅更新非空属性，保持其他字段原样。
-     * <set> 标签会自动处理 SQL 的 SET 关键字，并智能删除末尾多余的逗号。
      */
     @Update("<script> " +
             "UPDATE prd_check_list " +
@@ -88,7 +92,6 @@ public interface PrdCheckListMapper extends BaseMapper<PrdCheckList> {
     /**
      * 根据主键查询
      * @Results 定义结果集映射，解决数据库下划线字段(SNAKE_CASE)与Java驼峰属性(camelCase)的对应关系。
-     * 这里的 id="PrdMap" 可供后续查询方法通过 @ResultMap("PrdMap") 复用。
      */
     @Select("SELECT * FROM prd_check_list WHERE ID = #{id}")
     @Results(id = "PrdMap", value = {
@@ -119,13 +122,9 @@ public interface PrdCheckListMapper extends BaseMapper<PrdCheckList> {
      * 3. LIMIT：手动分页实现，offset 为跳过的记录数，limit 为查询条数。
      */
     @Select(
-            // 动态sql说明
             "<script> " +
-            // 1. 基础SQL：从 prd_check_list 表里查所有字段
             "SELECT * FROM prd_check_list " +
-            // 2. 动态条件标签：自动帮我处理 WHERE 和多余的 AND，不会报错
             "<where> " +
-
             // ======================================
             // 条件1：如果 需求名称 不为空，就按名称模糊查询
             // ======================================
@@ -137,8 +136,8 @@ public interface PrdCheckListMapper extends BaseMapper<PrdCheckList> {
             // ======================================
             "  <if test='deptIds != null and deptIds.size() > 0'> " +
             "    AND DEPT_ID IN " +
-
-            // 循环标签：把 List<Long> 变成 (1,2,3) 这种格式
+            // 循环标签foreach：把 List<Long> deptIds = [101, 102, 103]
+            // 变成 AND DEPT_ID IN (101,102,103)
             "<foreach " +
             "collection='deptIds' " +   // 要循环的集合
             "item='id' " +               // 每次循环的变量名
@@ -147,15 +146,12 @@ public interface PrdCheckListMapper extends BaseMapper<PrdCheckList> {
             "close=')'> " +             // 结尾加 )
             "      #{id} " +            // 填入每个id
             "</foreach> " +
-
             "  </if> " +
-
             "</where> " +
             // 3. 排序：按创建时间 最新的排在前面
             "ORDER BY CREATE_TIME DESC " +
             // 4. 分页：offset = 从第几条开始查；limit = 查多少条
             "LIMIT #{offset}, #{limit} " +
-
             "</script>")
     @ResultMap("PrdMap")
     List<PrdCheckList> selectByCondition(@Param("demandName") String demandName,

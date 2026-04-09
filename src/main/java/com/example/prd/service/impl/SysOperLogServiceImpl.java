@@ -36,10 +36,14 @@ public class SysOperLogServiceImpl implements SysOperLogService {
     public List<SysOperLog> selectLogList() {// 返回一组日志数据
         // 使用 MyBatis-Plus 查询最近的 50 条日志，按时间倒序排列
 
-        // 1. 创建 QueryWrapper 查询条件构造器（用于拼接 SQL 查询条件）
+        // 1. 创建一个“查询条件构造器”（用于拼接 SQL 查询条件）
         QueryWrapper<SysOperLog> queryWrapper = new QueryWrapper<>();
+        // 2. 按 OPER_TIME 字段 倒序排列（最新的在最前面）里面是sql语句
         queryWrapper.orderByDesc("OPER_TIME").last("LIMIT 50");
         return operLogMapper.selectList(queryWrapper);
+        // 这里是调用 BaseMapper 里的 selectList 方法，
+        // 把我们刚才用 QueryWrapper 拼好的查询条件传进去，
+        // 让 MyBatis-Plus 自动生成 SQL 并执行查询，返回日志列表。
     }
 
     // 全部导出没有限制
@@ -60,6 +64,7 @@ public class SysOperLogServiceImpl implements SysOperLogService {
                 .doWrite(list);
     }
 
+    // 限制导出数量
     @Override
     public void exportLog(String beginTime, String endTime, HttpServletResponse response) throws IOException {
         // 1. 设置响应头
@@ -80,7 +85,9 @@ public class SysOperLogServiceImpl implements SysOperLogService {
         queryWrapper.orderByDesc("OPER_TIME");
 
         List<SysOperLog> list = operLogMapper.selectList(queryWrapper);
-        EasyExcel.write(response.getOutputStream(), SysOperLog.class).sheet("审计日志").doWrite(list);
+        EasyExcel.write(response.getOutputStream(), SysOperLog.class).
+                sheet("审计日志").
+                doWrite(list);
     }
 
 

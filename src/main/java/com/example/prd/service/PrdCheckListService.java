@@ -17,8 +17,6 @@ public interface PrdCheckListService {
     // 根据 ID 获取详情
     PrdCheckList getById(String id);
 
-
-
     String uploadFiles(MultipartFile[] files) throws IOException;
 
     void exportAttachmentsAsZip(List<String> ids, HttpServletResponse response) throws IOException;

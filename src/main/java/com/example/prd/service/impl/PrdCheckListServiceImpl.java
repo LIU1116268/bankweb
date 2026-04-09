@@ -48,11 +48,13 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
     @Override
     @Transactional(rollbackFor = Exception.class) // 开启事务，遇异常自动回滚
     public boolean saveWithCheck(PrdCheckList entity) {
+        // 没值或者为空字符串 执行插入操作
         if (entity.getId() == null || entity.getId().trim().isEmpty()) {
             // 生成 32 位唯一标识符作为主键
             entity.setId(UUID.randomUUID().toString().replace("-", ""));
             return prdMapper.insertSelective(entity) > 0;
         } else {
+            // ID 不为空，执行更新操作
             return prdMapper.updateByPrimaryKeySelective(entity) > 0;
         }
     }
@@ -61,6 +63,38 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
     @Override
     public PrdCheckList getById(String id) {
         return prdMapper.selectByPrimaryKey(id);
+    }
+
+    // 需要注入部门服务类，用于递归查询部门 ID 集合
+    @Autowired
+    private SysDeptServiceImpl sysDeptService;
+    /**
+     * 分页查询
+     * @param current 当前页码
+     * @param size 每页条数
+     * @param demandName 需求名称（模糊查询条件）
+     * 修改后的分页查询：整合 Redis 加速的部门 ID 获取逻辑
+     */
+    @Override
+    public List<PrdCheckList> selectCustomPage(int current, int size, String demandName, Long deptId, boolean recursive) {
+        // 计算 SQL 的 LIMIT 偏移量 需要跳过多少页
+        long offset = (long) (current - 1) * size;
+        List<Long> deptIds = null;
+        if (deptId != null) {
+            if (recursive) {
+                // 这里调用的 selectChildrenIds 内部已经实现了 Redis 缓存
+                // 第一次调用会算递归并存 Redis，之后 24 小时内直接走 Redis，不再损耗 CPU 算递归
+                deptIds = sysDeptService.selectChildrenIds(deptId);
+            } else {
+                // 非递归模式，直接放当前部门 ID
+                deptIds = new ArrayList<>();
+                deptIds.add(deptId);
+            }
+        }
+
+        // 调用 Mapper，执行带 IN 子句的查询
+        // 模糊查询 查询哪些部门 跳过多少页 每页多少条
+        return prdMapper.selectByCondition(demandName, deptIds, offset, size);
     }
 
 
@@ -99,19 +133,23 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
             String shortUuid = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
             String saveName = shortUuid + "_" + fileName;
 
+            // 创建一个 “文件位置对象”，告诉程序：文件要保存到哪里、叫什么名字。
             File dest = new File(targetDir, saveName);
-            file.transferTo(dest); // 物理写入硬盘
+            // 物理写入硬盘
+            file.transferTo(dest);
 
-            // 存入列表，随后用逗号合并成一个字符串返回
+            // 路径存入列表
             savedPaths.add(datePath + saveName);
         }
+        // 最后用逗号合并成一个字符串返回
         return String.join(",", savedPaths);
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class) // 事务管理：若数据库更新失败，可手动处理或回滚
     public String uploadAndBind(MultipartFile[] files, String id) throws IOException {
-        // 1. 调用现有的 uploadFiles 方法处理物理文件存储
+        // 1. 调用当前类里面的 uploadFiles 方法处理物理文件存储
+        // 已存好返回地址了
         String newPaths = this.uploadFiles(files);
 
         if (newPaths == null || newPaths.isEmpty()) {
@@ -137,7 +175,7 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
             finalPath = newPaths;
         }
 
-        // 4. 执行数据库更新
+        // 4. 执行数据库更新，不创建对象，只用set不会更新数据库
         PrdCheckList updateEntity = new PrdCheckList(); // 创建一个空壳，里面全是 null
         updateEntity.setId(id); // 填上主键：定位到那一行
         updateEntity.setAttachmentPath(finalPath); // 填上新内容：要把路径改成什么
@@ -170,8 +208,38 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
         // 2. 清空数据库字段
         PrdCheckList updateNode = new PrdCheckList();
         updateNode.setId(id);
-        updateNode.setAttachmentPath(""); // 置空
+        updateNode.setAttachmentPath("");
+        // 真正更新数据库
         return prdMapper.updateByPrimaryKeySelective(updateNode) > 0;
+    }
+
+    /**
+     * 附件打包下载逻辑
+     * 将多条记录、多个附件路径汇总，统一打成一个 ZIP 包供用户下载。
+     */
+    @Override
+    public void exportAttachmentsAsZip(List<String> ids, HttpServletResponse response) throws IOException {
+        List<File> allFiles = new ArrayList<>();
+
+        for (String id : ids) {
+            PrdCheckList prd = prdMapper.selectByPrimaryKey(id);
+            // 严谨校验：确保记录存在且确实含有附件
+            if (prd != null && prd.getAttachmentPath() != null) {
+                // 数据库中存储格式为 "path1,path2"，需拆分处理
+                String[] paths = prd.getAttachmentPath().split(",");
+                for (String p : paths) {
+                    // 拼接物理全路径并核实硬盘上是否存在该文件
+                    File f = new File(uploadRootPath + p);
+                    if (f.exists()) {
+                        // 路径列表
+                        allFiles.add(f);
+                    }
+                }
+            }
+        }
+
+        // 调用 ZIP 压缩工具类，将 File 集合推送到 response 输出流
+        ZipUtils.downloadZip(allFiles, response);
     }
 
 
@@ -196,13 +264,13 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
         response.setCharacterEncoding("utf-8");
         // System.currentTimeMillis() 时间戳
         String fileName = "PRD_Export_" + System.currentTimeMillis() + ".xlsx";
-        // 告诉浏览器：下载，不要预览
+        // 内存处理方式：下载，不要预览
         response.setHeader("Content-Disposition", "attachment; filename=" + fileName);
 
         // 4. 执行写入并关闭流
-        EasyExcel.write(response.getOutputStream(), PrdCheckList.class)// 用输出流写，模板是PrdCheckList
+        EasyExcel.write(response.getOutputStream(), PrdCheckList.class)
                 .sheet("PRD核对清单")
-                .doWrite(data);  // 写入数据
+                .doWrite(data);
     }
 
     /**
@@ -214,63 +282,7 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
         return status;
     }
 
-    /**
-     * 附件打包下载逻辑
-     * 将多条记录、多个附件路径汇总，统一打成一个 ZIP 包供用户下载。
-     */
-    @Override
-    public void exportAttachmentsAsZip(List<String> ids, HttpServletResponse response) throws IOException {
-        List<File> allFiles = new ArrayList<>();
 
-        for (String id : ids) {
-            PrdCheckList prd = prdMapper.selectByPrimaryKey(id);
-            // 严谨校验：确保记录存在且确实含有附件
-            if (prd != null && prd.getAttachmentPath() != null) {
-                // 数据库中存储格式为 "path1,path2"，需拆分处理
-                String[] paths = prd.getAttachmentPath().split(",");
-                for (String p : paths) {
-                    // 拼接物理全路径并核实硬盘上是否存在该文件
-                    File f = new File(uploadRootPath + p);
-                    if (f.exists()) {
-                        allFiles.add(f);
-                    }
-                }
-            }
-        }
-
-        // 调用 ZIP 压缩工具类，将 File 集合推送到 response 输出流
-        ZipUtils.downloadZip(allFiles, response);
-    }
-
-    @Autowired
-    private SysDeptServiceImpl sysDeptService; // 注入部门服务
-    /**
-     * 分页查询
-     * @param current 当前页码
-     * @param size 每页条数
-     * @param demandName 需求名称（模糊查询条件）
-     * 修改后的分页查询：整合 Redis 加速的部门 ID 获取逻辑
-     */
-    @Override
-    public List<PrdCheckList> selectCustomPage(int current, int size, String demandName, Long deptId, boolean recursive) {
-        // 计算 SQL 的 LIMIT 偏移量
-        long offset = (long) (current - 1) * size;
-        List<Long> deptIds = null;
-        if (deptId != null) {
-            if (recursive) {
-                // 【加速点】：这里调用的 selectChildrenIds 内部已经实现了 Redis 缓存
-                // 第一次调用会算递归并存 Redis，之后 24 小时内直接走 Redis，不再损耗 CPU 算递归
-                deptIds = sysDeptService.selectChildrenIds(deptId);
-            } else {
-                // 非递归模式，直接放当前部门 ID
-                deptIds = new ArrayList<>();
-                deptIds.add(deptId);
-            }
-        }
-
-        // 调用 Mapper，执行带 IN 子句的查询
-        return prdMapper.selectByCondition(demandName, deptIds, offset, size);
-    }
 
 
 }

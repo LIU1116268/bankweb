@@ -1,7 +1,6 @@
 
 
 package com.example.prd.annotation;
-
 import java.lang.annotation.*;
 
 /**
@@ -10,6 +9,7 @@ import java.lang.annotation.*;
 @Target({ ElementType.PARAMETER, ElementType.METHOD }) // 注解用于方法
 @Retention(RetentionPolicy.RUNTIME) // 运行时有效
 @Documented
+// 注解接口
 public @interface Log {
 
     String title() default "";
