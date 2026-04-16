@@ -24,7 +24,7 @@ public interface PrdCheckListMapper extends BaseMapper<PrdCheckList> {
      */
     @Insert("<script>" +
             "INSERT INTO prd_check_list " +
-            "< trim prefix='(' suffix=')' suffixOverrides=',' > " +// 加前后缀，删逗号
+            "<trim prefix='(' suffix=')' suffixOverrides=',' > " +// 加前后缀，删逗号 <trim 不能空格
             "  <if test='id != null'>ID,</if> " +
             "  <if test='windowVerId != null'>WINDOW_VER_ID,</if> " +
             "  <if test='demandName != null'>DEMAND_NAME,</if> " +

@@ -41,11 +41,10 @@ public class LogAspect {
 
     /**
      * 处理完请求后执行（正常执行）
+     * 拦截点 + 返回结果名称
      */
-    @AfterReturning(
-            pointcut = "logPointCut()",  // 切点：哪些方法需要拦截
-            returning = "jsonResult"  // 把方法返回的结果，取名叫jsonResult
-    )
+    @AfterReturning(pointcut = "logPointCut()", returning = "jsonResult")
+    // 都是Spring自动传参
     public void doAfterReturning(JoinPoint joinPoint, // 代表当前被拦截的方法信息
                                  Object jsonResult ){// 方法返回的值jsonResult（比如返回列表、返回对象）
             handleLog(joinPoint,null,jsonResult);

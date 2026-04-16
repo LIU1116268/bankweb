@@ -124,7 +124,7 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
                 throw new RuntimeException("文件类型非法，仅支持 .sql, .pdf, .zip");
             }
 
-            // 容量检查：单文件上限 10MB
+            // 容量检查：单文件上限 10MB  B字节
             if (file.getSize() > 10 * 1024 * 1024) {
                 throw new RuntimeException("上传失败：文件【" + fileName + "】超过 10MB");
             }

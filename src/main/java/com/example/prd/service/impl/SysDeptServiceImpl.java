@@ -4,7 +4,9 @@ import com.example.prd.entity.SysDept;
 import com.example.prd.mapper.SysDeptMapper;
 import com.example.prd.service.SysDeptService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -147,10 +149,27 @@ setIfAbsent(lockKey) → 锁不存在
     }
 
     @Override
+    // 优化后的逻辑
     public void clearDeptCache() {
+        // 直接删除存储“整个部门树结构”的那个 Key
         redisTemplate.delete(CACHE_KEY_TREE);
-        java.util.Set<String> keys = redisTemplate.keys(CACHE_KEY_CHILDREN + "*");
-        if (keys != null) redisTemplate.delete(keys);
+
+        // 使用 scan 命令，每次扫描 1000 个，不阻塞主线程
+        ScanOptions options = ScanOptions.scanOptions()
+                .match(CACHE_KEY_CHILDREN + "*")// 设定搜索模式。找到所有以 bankweb:dept:childrenIds: 开头的 Key。
+                .count(1000).build();
+        // Cursor（游标）书签 记录已经查询到redis的哪个位置了
+        try (Cursor<String> cursor = redisTemplate.scan(options)) {
+            List<String> keysToDelete = new ArrayList<>();
+            // 前面还有没有没翻过的 Key
+            while (cursor.hasNext()) {
+                // 匹配到的key放集合里 所以.next
+                keysToDelete.add(cursor.next());
+            }
+            if (!keysToDelete.isEmpty()) {
+                redisTemplate.delete(keysToDelete);
+            }
+        }
     }
 
     @Override

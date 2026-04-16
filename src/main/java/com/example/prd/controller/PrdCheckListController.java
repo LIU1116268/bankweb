@@ -98,6 +98,9 @@ public class PrdCheckListController {
     // @RequestParam("files") 去前端找名叫 files 的参数
     // MultipartFile[] getfiles 后端用数组接收
     // 前端传过来一组名叫 files 的文件 → 后端用数组接收
+
+    // APIFox 的 form-data 通过 files 字段传文件，后端用 MultipartFile [] 接收，
+    // 拿到的是文件的元信息和输入流，不是完整文件内容。
     public Result upload(@RequestParam("files") MultipartFile[] getfiles) {
         try {
             String pathString = prdService.uploadFiles(getfiles);
