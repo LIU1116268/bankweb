@@ -6,6 +6,7 @@ import com.alibaba.excel.annotation.write.style.ColumnWidth;
 import com.alibaba.excel.annotation.write.style.ContentRowHeight;
 import com.alibaba.excel.annotation.write.style.HeadRowHeight;
 import com.baomidou.mybatisplus.annotation.*;
+import com.example.prd.enums.PrdCheckStatus;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -57,6 +58,13 @@ public class PrdCheckList {
     @ExcelProperty("生产环境检查")
     private String prodEnvCheck;
 
+    /**
+     * 投产流程状态，存库为 code，见 {@link PrdCheckStatus}
+     * 新增默认 DRAFT；变更只能通过 /prd/transition 接口，防止 save 绕过状态机
+     */
+    @ExcelProperty("流程状态")
+    private String status;
+
     @ExcelProperty("备注事项")
     private String remark;
 
@@ -84,4 +92,8 @@ public class PrdCheckList {
     /** 部门名称（仅展示，非表字段） */
     @TableField(exist = false)
     private String deptName;
+
+    /** 状态中文（仅展示，非表字段） */
+    @TableField(exist = false)
+    private String statusLabel;
 }

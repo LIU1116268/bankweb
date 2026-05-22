@@ -27,19 +27,28 @@ public class SysOperLogServiceImpl implements SysOperLogService {
     @Autowired
     private SysOperLogMapper operLogMapper;
 
-    @Override
+    /**
+     * 异步保存操作日志
+     * <p>
+     * {@link Async} 标记后，只要在启动类开启 {@code @EnableAsync}，
+     * Spring 会在线程池中执行本方法，不占用接口请求的 Tomcat 线程。
+     * 由 {@link com.example.prd.aspect.LogAspect} 在切面里调用。
+     */
     @Async
+    @Override
     public void insertOperLog(SysOperLog operLog) {
         operLogMapper.insert(operLog);
     }
 
     @Override
     public List<SysOperLog> selectLogList() {
+        // QueryWrapper 用于拼接 SQL 条件，无需手写 XML
         QueryWrapper<SysOperLog> queryWrapper = new QueryWrapper<>();
         queryWrapper.orderByDesc("OPER_TIME").last("LIMIT " + LIST_LIMIT);
         return operLogMapper.selectList(queryWrapper);
     }
 
+    /** 全量导出（无条数限制，演示环境慎用） */
     @Override
     public void exportLog(HttpServletResponse response) throws IOException {
         setExcelResponseHeader(response, "系统操作日志_");
@@ -49,6 +58,9 @@ public class SysOperLogServiceImpl implements SysOperLogService {
                 .doWrite(list);
     }
 
+    /**
+     * 按时间范围导出；未传时间则兜底最多 1000 条，防止一次导出过大
+     */
     @Override
     public void exportLog(String beginTime, String endTime, HttpServletResponse response) throws IOException {
         setExcelResponseHeader(response, "系统审计日志_");

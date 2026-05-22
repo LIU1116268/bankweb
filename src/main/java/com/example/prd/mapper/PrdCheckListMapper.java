@@ -15,7 +15,11 @@ import java.util.List;
 public interface PrdCheckListMapper extends BaseMapper<PrdCheckList> {
 
     /**
-     * 动态插入：仅插入非空字段
+     * 动态插入（Selective）：仅插入对象中非空字段
+     * <p>
+     * 1. {@code <script>} 支持动态 SQL<br>
+     * 2. {@code <trim>} 自动处理括号并去掉末尾多余逗号<br>
+     * 3. {@code <if>} 判断属性是否有值，有才拼进 INSERT 语句
      */
     @Insert("<script>" +
             "INSERT INTO prd_check_list " +
@@ -31,7 +35,9 @@ public interface PrdCheckListMapper extends BaseMapper<PrdCheckList> {
             "  <if test='techManager != null'>TECH_MANAGER,</if>" +
             "  <if test='uatEnvCheck != null'>UAT_ENV_CHECK,</if>" +
             "  <if test='prodEnvCheck != null'>PROD_ENV_CHECK,</if>" +
+            "  <if test='status != null'>STATUS,</if>" +
             "  <if test='remark != null'>REMARK,</if>" +
+            "  <if test='deptId != null'>DEPT_ID,</if>" +
             "  <if test='attachmentPath != null'>ATTACHMENT_PATH,</if>" +
             "  <if test='createUser != null'>CREATE_USER,</if>" +
             "  CREATE_TIME" +
@@ -48,7 +54,9 @@ public interface PrdCheckListMapper extends BaseMapper<PrdCheckList> {
             "  <if test='techManager != null'>#{techManager},</if>" +
             "  <if test='uatEnvCheck != null'>#{uatEnvCheck},</if>" +
             "  <if test='prodEnvCheck != null'>#{prodEnvCheck},</if>" +
+            "  <if test='status != null'>#{status},</if>" +
             "  <if test='remark != null'>#{remark},</if>" +
+            "  <if test='deptId != null'>#{deptId},</if>" +
             "  <if test='attachmentPath != null'>#{attachmentPath},</if>" +
             "  <if test='createUser != null'>#{createUser},</if>" +
             "  NOW()" +
@@ -72,7 +80,9 @@ public interface PrdCheckListMapper extends BaseMapper<PrdCheckList> {
             "  <if test='techManager != null'>TECH_MANAGER = #{techManager},</if>" +
             "  <if test='uatEnvCheck != null'>UAT_ENV_CHECK = #{uatEnvCheck},</if>" +
             "  <if test='prodEnvCheck != null'>PROD_ENV_CHECK = #{prodEnvCheck},</if>" +
+            "  <if test='status != null'>STATUS = #{status},</if>" +
             "  <if test='remark != null'>REMARK = #{remark},</if>" +
+            "  <if test='deptId != null'>DEPT_ID = #{deptId},</if>" +
             "  <if test='attachmentPath != null'>ATTACHMENT_PATH = #{attachmentPath},</if>" +
             "  <if test='updateUser != null'>UPDATE_USER = #{updateUser},</if>" +
             "  UPDATE_TIME = NOW()" +
@@ -81,6 +91,11 @@ public interface PrdCheckListMapper extends BaseMapper<PrdCheckList> {
             "</script>")
     int updateByPrimaryKeySelective(PrdCheckList record);
 
+    /**
+     * 按主键查询
+     * <p>
+     * {@link Results} 解决数据库下划线字段与 Java 驼峰属性的映射
+     */
     @Select("SELECT * FROM prd_check_list WHERE ID = #{id}")
     @Results(id = "PrdMap", value = {
             @Result(column = "ID", property = "id", id = true),
@@ -94,6 +109,8 @@ public interface PrdCheckListMapper extends BaseMapper<PrdCheckList> {
             @Result(column = "TECH_MANAGER", property = "techManager"),
             @Result(column = "UAT_ENV_CHECK", property = "uatEnvCheck"),
             @Result(column = "PROD_ENV_CHECK", property = "prodEnvCheck"),
+            @Result(column = "STATUS", property = "status"),
+            @Result(column = "DEPT_ID", property = "deptId"),
             @Result(column = "REMARK", property = "remark"),
             @Result(column = "ATTACHMENT_PATH", property = "attachmentPath"),
             @Result(column = "CREATE_USER", property = "createUser"),
@@ -104,7 +121,12 @@ public interface PrdCheckListMapper extends BaseMapper<PrdCheckList> {
     PrdCheckList selectByPrimaryKey(String id);
 
     /**
-     * 分页条件查询（支持需求名模糊、部门 IN 过滤）
+     * 分页条件查询
+     * <p>
+     * 1. {@code <where>}：内部条件都不成立则不生成 WHERE，否则自动处理首个 AND<br>
+     * 2. LIKE CONCAT：跨数据库的模糊查询写法<br>
+     * 3. LIMIT：offset=跳过行数，limit=每页条数<br>
+     * 4. foreach：把 List&lt;Long&gt; deptIds 展开为 IN (101,102,103)
      */
     @Select("<script>" +
             "SELECT * FROM prd_check_list " +

@@ -33,8 +33,10 @@ import java.util.concurrent.TimeUnit;
 @Order(1)
 public class RateLimitAspect {
 
+    /** Redis 中限流器 Key 的统一前缀 */
     private static final String KEY_PREFIX = "bankweb:rateLimit:";
 
+    /** 注入 Redisson，使用 RRateLimiter 实现分布式令牌桶限流 */
     @Resource
     private RedissonClient redissonClient;
 
@@ -42,6 +44,9 @@ public class RateLimitAspect {
     public void rateLimitPointCut() {
     }
 
+    /**
+     * 在 Controller 方法执行前先申请令牌；拿不到则抛异常，由全局处理器返回 429
+     */
     @Around("rateLimitPointCut()")
     public Object around(ProceedingJoinPoint joinPoint) throws Throwable {
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();
@@ -51,16 +56,19 @@ public class RateLimitAspect {
             return joinPoint.proceed();
         }
 
+        // 按「类.方法:key:IP」拼 Redis 中的限流器名称
         String limitKey = buildLimitKey(joinPoint, rateLimit);
         RRateLimiter limiter = redissonClient.getRateLimiter(limitKey);
         initRateLimiter(limiter, rateLimit);
 
+        // tryAcquire(1)：申请 1 个令牌，失败说明当前窗口配额已用完
         if (!limiter.tryAcquire(1)) {
             throw new RateLimitException("访问过于频繁，请稍后再试");
         }
         return joinPoint.proceed();
     }
 
+    /** 首次使用时初始化速率；已存在配置则不再重复设置 */
     private void initRateLimiter(RRateLimiter limiter, RateLimit rateLimit) {
         if (limiter.getConfig() == null) {
             limiter.trySetRate(
@@ -91,6 +99,10 @@ public class RateLimitAspect {
         return KEY_PREFIX + base + ":" + clientIp;
     }
 
+    /**
+     * 解析客户端 IP（兼容 Nginx 反向代理）
+     * 优先 X-Forwarded-For 第一个 IP，其次 X-Real-IP，最后 RemoteAddr
+     */
     private String resolveClientIp() {
         ServletRequestAttributes attributes =
                 (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();

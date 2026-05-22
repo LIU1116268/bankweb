@@ -3,8 +3,10 @@ package com.example.prd.controller;
 import com.example.prd.annotation.Log;
 import com.example.prd.annotation.RateLimit;
 import com.example.prd.common.Result;
+import com.example.prd.dto.PrdStatusTransitionRequest;
 import com.example.prd.entity.PrdCheckList;
 import com.example.prd.service.PrdCheckListService;
+import com.example.prd.vo.PrdStatusTransitionVO;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -16,7 +18,7 @@ import java.util.List;
 /**
  * PRD 投产检查清单 - 接口层
  * <p>
- * 模块职责：清单 CRUD、分页检索、附件管理、Excel/ZIP 导出
+ * 模块职责：清单 CRUD、投产状态机流转、分页检索、附件管理、Excel/ZIP 导出
  * <p>
  * 基础地址：{@code http://localhost:8080/prd}
  */
@@ -56,6 +58,9 @@ public class PrdCheckListController {
      *   "createUser": "104356"
      * }
      * </pre>
+     * <p>
+     * 注意：新增会写入 status=DRAFT，要求表 prd_check_list 已存在 STATUS 列，
+     * 请先执行 {@code sql/prd_check_list_add_status.sql}，否则会报 500。
      */
     @Log(title = "核对清单", businessType = "SAVE")
     @PostMapping("/save")
@@ -76,6 +81,71 @@ public class PrdCheckListController {
     @GetMapping("/detail/{id}")
     public Result<PrdCheckList> detail(@PathVariable String id) {
         return Result.success(prdService.getById(id));
+    }
+
+    // ==================== 投产状态机 ====================
+
+    /**
+     * 状态流转（状态机核心接口）
+     * <p>
+     * 请求：POST /prd/transition<br>
+     * Content-Type：application/json
+     * <p>
+     * 合法流转路径：
+     * <pre>
+     * 草稿(DRAFT) → 已提交(SUBMITTED) → UAT通过(UAT_PASSED) → 待投产(PROD_READY) → 已归档(ARCHIVED)
+     * 已提交(SUBMITTED) 可打回 → 草稿(DRAFT)
+     * </pre>
+     * <p>
+     * 本接口标注 {@link Log}，操作会异步写入 sys_oper_log，businessType=TRANSITION，便于审计追溯。
+     * <p>
+     * 测试用例：
+     * <pre>
+     * POST http://localhost:8080/prd/transition
+     * Body 示例（提交评审）：
+     * {
+     *   "id": "202603180001",
+     *   "targetStatus": "SUBMITTED",
+     *   "operator": "104356",
+     *   "remark": "材料已齐，提交UAT复核"
+     * }
+     *
+     * Body 示例（UAT 通过）：
+     * {
+     *   "id": "202603180001",
+     *   "targetStatus": "UAT_PASSED",
+     *   "operator": "reviewer01",
+     *   "remark": "UAT环境验证通过"
+     * }
+     * </pre>
+     */
+    @Log(title = "PRD状态流转", businessType = "TRANSITION")
+    @PostMapping("/transition")
+    public Result<PrdStatusTransitionVO> transition(@RequestBody PrdStatusTransitionRequest request) {
+        try {
+            return Result.success(prdService.transitionStatus(request));
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 查询某记录当前允许流转到的下一状态（供前端按钮/下拉渲染）
+     * <p>
+     * 请求：GET /prd/transition/allowed/{id}
+     * <p>
+     * 测试用例：
+     * <pre>
+     * GET http://localhost:8080/prd/transition/allowed/202603180001
+     * </pre>
+     */
+    @GetMapping("/transition/allowed/{id}")
+    public Result<PrdStatusTransitionVO> allowedTransitions(@PathVariable String id) {
+        try {
+            return Result.success(prdService.getAllowedTransitions(id));
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
     }
 
     // ==================== 分页查询 ====================
@@ -111,7 +181,7 @@ public class PrdCheckListController {
      * <p>
      * 限流：同一 IP 每分钟最多 60 次
      */
-    @RateLimit(rate = 60, interval = 1, key = "list")
+    @RateLimit(rate = 60, interval = 1, key = "list")   // Redisson：同一 IP 每分钟最多 60 次
     @GetMapping("/list")
     public Result<List<PrdCheckList>> list(
             @RequestParam(defaultValue = "1") int current,
@@ -143,7 +213,7 @@ public class PrdCheckListController {
      * <p>
      * 限流：同一 IP 每分钟最多 10 次
      */
-    @RateLimit(rate = 10, interval = 1, key = "upload")
+    @RateLimit(rate = 10, interval = 1, key = "upload")  // Redisson：同一 IP 每分钟最多 10 次上传
     @Log(title = "文件上传", businessType = "UPLOAD")
     @PostMapping("/upload")
     public Result<String> upload(@RequestParam("files") MultipartFile[] files) {
@@ -170,7 +240,7 @@ public class PrdCheckListController {
      * <p>
      * 限流：同一 IP 每分钟最多 10 次
      */
-    @RateLimit(rate = 10, interval = 1, key = "uploadBind")
+    @RateLimit(rate = 10, interval = 1, key = "uploadBind") // Redisson：绑定上传限流
     @Log(title = "关联附件上传", businessType = "UPLOADBIND")
     @PostMapping("/uploadBind")
     public Result<String> uploadBind(
@@ -200,7 +270,7 @@ public class PrdCheckListController {
     @DeleteMapping("/deleteFile/{id}")
     public Result<Void> deleteFile(@PathVariable String id) {
         return prdService.deleteAttachment(id)
-                ? Result.success("附件已清理")
+                ? Result.success("附件已清理", null)
                 : Result.error("清理失败");
     }
 
@@ -220,7 +290,7 @@ public class PrdCheckListController {
      * <p>
      * 限流：同一 IP 每分钟最多 5 次；超限返回 JSON：{"code":429,"msg":"访问过于频繁，请稍后再试"}
      */
-    @RateLimit(rate = 5, interval = 1, key = "exportZip")
+    @RateLimit(rate = 5, interval = 1, key = "exportZip")   // Redisson：ZIP 导出限流，防打满磁盘/带宽
     @GetMapping("/exportZip")
     public void exportZip(@RequestParam List<String> ids, HttpServletResponse response) {
         try {
@@ -248,7 +318,7 @@ public class PrdCheckListController {
      * <p>
      * 限流：同一 IP 每分钟最多 5 次
      */
-    @RateLimit(rate = 5, interval = 1, key = "exportExcel")
+    @RateLimit(rate = 5, interval = 1, key = "exportExcel") // Redisson：Excel 导出限流
     @GetMapping("/exportExcel")
     public void exportExcel(
             @RequestParam(required = false) String demandName,

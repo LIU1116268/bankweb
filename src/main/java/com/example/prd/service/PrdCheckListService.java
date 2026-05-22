@@ -1,6 +1,8 @@
 package com.example.prd.service;
 
+import com.example.prd.dto.PrdStatusTransitionRequest;
 import com.example.prd.entity.PrdCheckList;
+import com.example.prd.vo.PrdStatusTransitionVO;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -17,6 +19,14 @@ public interface PrdCheckListService {
 
     /** 按主键查询 */
     PrdCheckList getById(String id);
+
+    /**
+     * 状态机流转：校验合法跳转后更新 STATUS，配合 @Log 写入审计日志
+     */
+    PrdStatusTransitionVO transitionStatus(PrdStatusTransitionRequest request);
+
+    /** 查询某记录当前允许流转到的下一状态列表 */
+    PrdStatusTransitionVO getAllowedTransitions(String id);
 
     /** 分页条件查询（支持部门递归范围） */
     List<PrdCheckList> selectCustomPage(int current, int size, String demandName, Long deptId, boolean recursive);

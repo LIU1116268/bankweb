@@ -10,7 +10,8 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 /**
  * Redis 序列化配置
  * <p>
- * Key 使用 String 序列化；Value 使用 JSON 序列化，便于在 Redis 客户端中直接查看部门树等缓存内容
+ * 执行 {@code redisTemplate.opsForValue().set(CACHE_KEY_TREE, tree)} 时，
+ * 在 Redis 可视化工具里能看到整齐的 JSON，而不是一串难以阅读的乱码。
  */
 @Configuration
 public class RedisConfig {
@@ -20,11 +21,13 @@ public class RedisConfig {
         RedisTemplate<String, Object> template = new RedisTemplate<>();
         template.setConnectionFactory(factory);
 
+        // Key 使用 String 序列化，便于在客户端直接阅读
         StringRedisSerializer stringSerializer = new StringRedisSerializer();
-        GenericJackson2JsonRedisSerializer jsonSerializer = new GenericJackson2JsonRedisSerializer();
-
         template.setKeySerializer(stringSerializer);
         template.setHashKeySerializer(stringSerializer);
+
+        // Value 使用 JSON 序列化（部门树、子部门 ID 列表等对象）
+        GenericJackson2JsonRedisSerializer jsonSerializer = new GenericJackson2JsonRedisSerializer();
         template.setValueSerializer(jsonSerializer);
         template.setHashValueSerializer(jsonSerializer);
 

@@ -27,7 +27,11 @@ public class SysDept {
     /** 状态：0 正常，1 停用 */
     private String status;
 
-    /** 子部门列表（树形展示用，非数据库字段） */
+    /**
+     * 子部门列表（树形展示用，非数据库字段）
+     * <p>
+     * 表 sys_dept 没有 children 列；Java 对象需要此字段存放「下属部门列表」
+     */
     @TableField(exist = false)
     private List<SysDept> children = new ArrayList<>();
 }
