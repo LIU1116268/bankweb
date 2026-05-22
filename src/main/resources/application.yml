@@ -11,7 +11,8 @@ spring:
     redis:
       host: localhost
       port: 6379
-      password:  #YOUR_PASSWORD
+      # 本地 Redis 无密码时不要配置 password，否则会触发 AUTH 导致启动失败
+      # password: your-redis-password
   servlet:
     multipart:
       max-file-size: 10MB  # 单个文件大小

@@ -7,24 +7,30 @@ import com.alibaba.excel.annotation.write.style.ContentRowHeight;
 import com.alibaba.excel.annotation.write.style.HeadRowHeight;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
+
 import java.time.LocalDateTime;
 
+/**
+ * PRD 投产检查清单 - 实体
+ * <p>
+ * 对应表：prd_check_list
+ */
 @Data
 @TableName("prd_check_list")
-@HeadRowHeight(25)     // 设置表头高度
-@ContentRowHeight(20)  // 设置内容行高
-@ColumnWidth(20)       // 设置默认列宽
+@HeadRowHeight(25)
+@ContentRowHeight(20)
+@ColumnWidth(20)
 public class PrdCheckList {
 
     @TableId(type = IdType.ASSIGN_ID)
-    @ExcelProperty("数据ID") // 如果不想导出 ID，可以换成 @ExcelIgnore
+    @ExcelProperty("数据ID")
     private String id;
 
     @ExcelProperty("投产窗口版本")
     private String windowVerId;
 
     @ExcelProperty("需求名称")
-    @ColumnWidth(35) // 需求名称通常较长，单独设置宽度
+    @ColumnWidth(35)
     private String demandName;
 
     @ExcelProperty("投产内容说明")
@@ -54,7 +60,8 @@ public class PrdCheckList {
     @ExcelProperty("备注事项")
     private String remark;
 
-    @ExcelIgnore // 导出 Excel 时忽略这个字段，因为路径对业务员没意义
+    /** 附件相对路径，多个以逗号分隔 */
+    @ExcelIgnore
     private String attachmentPath;
 
     @ExcelProperty("创建人")
@@ -64,16 +71,17 @@ public class PrdCheckList {
     @ExcelProperty("创建时间")
     private LocalDateTime createTime;
 
-    @ExcelIgnore // 更新人通常内部使用，导出时忽略
+    @ExcelIgnore
     private String updateUser;
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
-    @ExcelIgnore // 更新时间通常不需要导出
+    @ExcelIgnore
     private LocalDateTime updateTime;
 
-    // 在 PrdCheckList 类中添加
+    /** 所属部门 ID */
     private Long deptId;
 
+    /** 部门名称（仅展示，非表字段） */
     @TableField(exist = false)
-    private String deptName; // 用于展示部门名称，数据库不存
+    private String deptName;
 }

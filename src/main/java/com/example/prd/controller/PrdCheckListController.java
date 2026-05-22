@@ -1,6 +1,7 @@
 package com.example.prd.controller;
 
 import com.example.prd.annotation.Log;
+import com.example.prd.annotation.RateLimit;
 import com.example.prd.common.Result;
 import com.example.prd.entity.PrdCheckList;
 import com.example.prd.service.PrdCheckListService;
@@ -13,8 +14,11 @@ import java.io.IOException;
 import java.util.List;
 
 /**
- * 产品核对清单前端控制器
- * 提供 CRUD 接口、文件上传、Excel 导出及附件打包功能
+ * PRD 投产检查清单 - 接口层
+ * <p>
+ * 模块职责：清单 CRUD、分页检索、附件管理、Excel/ZIP 导出
+ * <p>
+ * 基础地址：{@code http://localhost:8080/prd}
  */
 @RestController
 @RequestMapping("/prd")
@@ -23,140 +27,202 @@ public class PrdCheckListController {
     @Autowired
     private PrdCheckListService prdService;
 
+    // ==================== 数据维护 ====================
+
     /**
-     * 新增或更新记录
-     * 逻辑：对象 ID 为空则新增，不为空则更新。
-     * 请求方式：POST
-     * 测试 URL: http://localhost:8080/prd/save
-     * 参数示例：JSON 格式的 PrdCheckList 对象
+     * 新增或更新核对清单
+     * <p>
+     * 请求：POST /prd/save<br>
+     * Content-Type：application/json
+     * <p>
+     * 规则：id 为空则新增（服务端生成 UUID）；id 不为空则按主键选择性更新
+     * <p>
+     * 测试用例：
+     * <pre>
+     * POST http://localhost:8080/prd/save
+     * Body 示例（新增）：
      * {
-     *     "windowVerId": "202603251",
-     *     "demandName": "信用卡-分期额度动态测算",
-     *     "prodContent": "前端UI适配-H9",
-     *     "relaFeature": "feature-card-limit-02",
-     *     "relaScript": "不涉及",
-     *     "prodType": "功能新增",
-     *     "demandManager": "范小凡",
-     *     "techManager": "黄小布",
-     *     "uatEnvCheck": "已通过",
-     *     "prodEnvCheck": "待核对",
-     *     "remark": "",
-     *     "createUser": "104356",
+     *   "windowVerId": "202603251",
+     *   "demandName": "信用卡-分期额度动态测算",
+     *   "prodContent": "前端UI适配-H9",
+     *   "relaFeature": "feature-card-limit-02",
+     *   "relaScript": "不涉及",
+     *   "prodType": "功能新增",
+     *   "demandManager": "范小凡",
+     *   "techManager": "黄小布",
+     *   "uatEnvCheck": "已通过",
+     *   "prodEnvCheck": "待核对",
+     *   "remark": "",
+     *   "createUser": "104356"
      * }
+     * </pre>
      */
     @Log(title = "核对清单", businessType = "SAVE")
     @PostMapping("/save")
-    public Result save(@RequestBody PrdCheckList prd) {
+    public Result<Void> save(@RequestBody PrdCheckList prd) {
         return prdService.saveWithCheck(prd) ? Result.success() : Result.error("保存失败");
     }
 
     /**
-     * 根据主键 ID 获取详情
-     * 请求方式：GET
-     * 测试 http://localhost:8080/prd/detail/PCL2026031800000003
+     * 按主键查询详情
+     * <p>
+     * 请求：GET /prd/detail/{id}
+     * <p>
+     * 测试用例：
+     * <pre>
+     * GET http://localhost:8080/prd/detail/PCL2026031800000003
+     * </pre>
      */
     @GetMapping("/detail/{id}")
-    public Result detail(@PathVariable String id) {
+    public Result<PrdCheckList> detail(@PathVariable String id) {
         return Result.success(prdService.getById(id));
     }
 
+    // ==================== 分页查询 ====================
+
     /**
-     * 分页查询列表（支持按需求名称模糊搜索）
-     * 请求方式：GET
-     * 测试示例：
-     * 1. 基础分页：http://localhost:8080/prd/list?current=1&size=5
-     * 2. 条件搜索：http://localhost:8080/prd/list?current=1&size=5&demandName=信用卡
-     * * @param current 当前页码，默认 1  不传入就默认
-     * @param size    每页条数，默认 5 最多就显示满足条件的5条
-     * @param demandName 搜索关键词（非必传）
-     * 查成都分行及下属所有支行（默认行为）：
-     * http://localhost:8080/prd/list?deptId=101
-     * 只查成都分行本级的数据（不看支行）：
-     * http://localhost:8080/prd/list?deptId=101&recursive=false
+     * 分页列表（支持需求名模糊搜索、按部门范围过滤）
+     * <p>
+     * 请求：GET /prd/list
+     * <p>
+     * 参数说明：
+     * <ul>
+     *   <li>current - 当前页，默认 1</li>
+     *   <li>size - 每页条数，默认 5</li>
+     *   <li>demandName - 需求名称关键词（可选）</li>
+     *   <li>deptId - 部门 ID（可选）</li>
+     *   <li>recursive - 是否包含下级部门，默认 true</li>
+     * </ul>
+     * <p>
+     * 测试用例：
+     * <pre>
+     * 1. 基础分页：
+     *    GET http://localhost:8080/prd/list?current=1&amp;size=5
+     *
+     * 2. 按需求名搜索：
+     *    GET http://localhost:8080/prd/list?current=1&amp;size=5&amp;demandName=信用卡
+     *
+     * 3. 查某分行及全部下级支行（默认递归）：
+     *    GET http://localhost:8080/prd/list?deptId=101
+     *
+     * 4. 只查该分行本级（不含下级）：
+     *    GET http://localhost:8080/prd/list?deptId=101&amp;recursive=false
+     * </pre>
+     * <p>
+     * 限流：同一 IP 每分钟最多 60 次
      */
+    @RateLimit(rate = 60, interval = 1, key = "list")
     @GetMapping("/list")
-    public Result list(@RequestParam(defaultValue = "1") int current,
-                       @RequestParam(defaultValue = "5") int size,
-                       @RequestParam(required = false) String demandName,
-                       @RequestParam(required = false) Long deptId,// 查询相关部门
-                       @RequestParam(defaultValue = "true") boolean recursive) { //是否需要部门递归
+    public Result<List<PrdCheckList>> list(
+            @RequestParam(defaultValue = "1") int current,
+            @RequestParam(defaultValue = "5") int size,
+            @RequestParam(required = false) String demandName,
+            @RequestParam(required = false) Long deptId,
+            @RequestParam(defaultValue = "true") boolean recursive) {
         return Result.success(prdService.selectCustomPage(current, size, demandName, deptId, recursive));
     }
 
-
+    // ==================== 附件管理 ====================
 
     /**
-     * 多文件上传接口
-     * 请求方式：POST (body/form-data),在api里面选择
-     * 参数名：files (可选择多个文件同步上传)
-     * 参数类型file
-     * 返回值：成功后返回在服务器存储的相对路径字符串（逗号分隔）
-     * upload-path: D:/prd_attachments/ 上传文件存放的根路径
+     * 多文件上传（仅上传，不绑定业务记录）
+     * <p>
+     * 请求：POST /prd/upload<br>
+     * Content-Type：multipart/form-data<br>
+     * 参数名：files（File 类型，可多选）
+     * <p>
+     * 返回：相对路径字符串，多个文件以英文逗号分隔
+     * <p>
+     * 存储根目录见 application.yml 中 file.upload-path（默认 D:/prd_attachments/）
+     * <p>
+     * 测试用例（Apifox / Postman）：
+     * <pre>
+     * POST http://localhost:8080/prd/upload
+     * form-data: files = 选择 .sql / .pdf / .zip 文件（可多选）
+     * </pre>
+     * <p>
+     * 限流：同一 IP 每分钟最多 10 次
      */
+    @RateLimit(rate = 10, interval = 1, key = "upload")
     @Log(title = "文件上传", businessType = "UPLOAD")
     @PostMapping("/upload")
-    // @RequestParam("files") 去前端找名叫 files 的参数
-    // MultipartFile[] getfiles 后端用数组接收
-    // 前端传过来一组名叫 files 的文件 → 后端用数组接收
-
-    // APIFox 的 form-data 通过 files 字段传文件，后端用 MultipartFile [] 接收，
-    // 拿到的是文件的元信息和输入流，不是完整文件内容。
-    public Result upload(@RequestParam("files") MultipartFile[] getfiles) {
+    public Result<String> upload(@RequestParam("files") MultipartFile[] files) {
         try {
-            String pathString = prdService.uploadFiles(getfiles);
-            return Result.success(pathString);
+            return Result.success(prdService.uploadFiles(files));
         } catch (Exception e) {
             return Result.error("文件上传失败：" + e.getMessage());
         }
     }
 
     /**
-     * 关联上传接口
-     * 请求示例：POST http://localhost:8080/prd/uploadBind?id=PCL2026031800000004
-     * 注意：需使用 multipart/form-data 格式发送文件
-     * 适用于“对已有数据补录附件”。
-     * http://localhost:8080/sysLog/list
+     * 上传并绑定到指定清单记录
+     * <p>
+     * 请求：POST /prd/uploadBind<br>
+     * Content-Type：multipart/form-data
+     * <p>
+     * 参数：files（文件数组）、id（业务主键）
+     * <p>
+     * 测试用例：
+     * <pre>
+     * POST http://localhost:8080/prd/uploadBind?id=PCL2026031800000004
+     * form-data: files = 选择附件
+     * </pre>
+     * <p>
+     * 限流：同一 IP 每分钟最多 10 次
      */
+    @RateLimit(rate = 10, interval = 1, key = "uploadBind")
     @Log(title = "关联附件上传", businessType = "UPLOADBIND")
     @PostMapping("/uploadBind")
-    public Result upload(@RequestParam("files") MultipartFile[] files,
-                         @RequestParam("id") String id) {
+    public Result<String> uploadBind(
+            @RequestParam("files") MultipartFile[] files,
+            @RequestParam("id") String id) {
         try {
-            // 执行“上传+绑定”业务
             String finalPath = prdService.uploadAndBind(files, id);
             return Result.success("文件已成功关联至记录：" + id, finalPath);
         } catch (RuntimeException e) {
-            // 捕获业务异常（如 ID 不存在）
             return Result.error(e.getMessage());
         } catch (Exception e) {
-            // 捕获系统异常（如读写错误）
             return Result.error("服务器内部错误：" + e.getMessage());
         }
     }
 
-
     /**
-     * 删除附件
-     * 请求方式：DELETE
-     * 测试 URL: http://localhost:8080/prd/deleteFile/PCL2026031800000004
+     * 删除指定记录的全部附件（物理文件 + 清空数据库路径字段）
+     * <p>
+     * 请求：DELETE /prd/deleteFile/{id}
+     * <p>
+     * 测试用例：
+     * <pre>
+     * DELETE http://localhost:8080/prd/deleteFile/PCL2026031800000004
+     * </pre>
      */
     @Log(title = "删除附件", businessType = "DELETE")
     @DeleteMapping("/deleteFile/{id}")
-    public Result deleteFile(@PathVariable String id) {
-        return prdService.deleteAttachment(id) ? Result.success("附件已清理") : Result.error("清理失败");
+    public Result<Void> deleteFile(@PathVariable String id) {
+        return prdService.deleteAttachment(id)
+                ? Result.success("附件已清理")
+                : Result.error("清理失败");
     }
 
+    // ==================== 导出下载 ====================
+
     /**
-     * 批量导出附件并压缩为 ZIP 包
-     * 请求方式：GET
-     * 测试 URL: http://localhost:8080/prd/exportZip?ids=PCL2026031800000004,PCL2026031800000003
-     * 注意：直接通过浏览器访问会触发文件下载。
+     * 批量打包附件为 ZIP 下载
+     * <p>
+     * 请求：GET /prd/exportZip?ids=id1,id2
+     * <p>
+     * 说明：浏览器直接访问将触发文件下载；响应体为二进制流，非 JSON
+     * <p>
+     * 测试用例：
+     * <pre>
+     * GET http://localhost:8080/prd/exportZip?ids=PCL2026031800000004,PCL2026031800000003
+     * </pre>
+     * <p>
+     * 限流：同一 IP 每分钟最多 5 次；超限返回 JSON：{"code":429,"msg":"访问过于频繁，请稍后再试"}
      */
+    @RateLimit(rate = 5, interval = 1, key = "exportZip")
     @GetMapping("/exportZip")
-    public void export(
-            @RequestParam List<String> ids, // 请求参数
-            HttpServletResponse response // 响应对象
-    ) {
+    public void exportZip(@RequestParam List<String> ids, HttpServletResponse response) {
         try {
             prdService.exportAttachmentsAsZip(ids, response);
         } catch (IOException e) {
@@ -165,15 +231,28 @@ public class PrdCheckListController {
     }
 
     /**
-     * 导出 Excel 报表接口
-     * 请求方式：GET
-     * 测试 URL: http://localhost:8080/prd/exportExcel?demandName=测算需求
-     * 说明：如果不传 demandName，则导出全量数据。
-     * HttpServletResponse、HttpServletRequest
-     * 写在参数里，Spring 就自动给
+     * 导出 PRD 清单 Excel
+     * <p>
+     * 请求：GET /prd/exportExcel
+     * <p>
+     * 参数：demandName（可选，不传则导出全量）
+     * <p>
+     * 测试用例：
+     * <pre>
+     * 1. 按需求名过滤：
+     *    GET http://localhost:8080/prd/exportExcel?demandName=测算需求
+     *
+     * 2. 导出全量：
+     *    GET http://localhost:8080/prd/exportExcel
+     * </pre>
+     * <p>
+     * 限流：同一 IP 每分钟最多 5 次
      */
+    @RateLimit(rate = 5, interval = 1, key = "exportExcel")
     @GetMapping("/exportExcel")
-    public void exportExcel(@RequestParam(required = false) String demandName, HttpServletResponse response) {
+    public void exportExcel(
+            @RequestParam(required = false) String demandName,
+            HttpServletResponse response) {
         try {
             prdService.exportExcel(demandName, response);
         } catch (IOException e) {

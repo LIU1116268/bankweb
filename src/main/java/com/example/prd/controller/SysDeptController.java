@@ -8,51 +8,65 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+/**
+ * 组织架构（部门）- 接口层
+ * <p>
+ * 模块职责：部门树查询、部门新增；配合 Redis 缓存与变更时缓存失效
+ * <p>
+ * 基础地址：{@code http://localhost:8080/system/dept}
+ */
 @RestController
 @RequestMapping("/system/dept")
 public class SysDeptController {
+
     @Autowired
     private SysDeptService deptService;
 
     /**
-     * 获取所有部门树形汇总列表，方便preCheckList页面选择部门,
-     * URL: http://localhost:8080/system/dept/tree
+     * 获取部门树（供前端下拉/树形选择）
+     * <p>
+     * 请求：GET /system/dept/tree
+     * <p>
+     * 说明：先查库得到扁平列表，再由 Service 递归组装为树；结果带 Redis 缓存
+     * <p>
+     * 测试用例：
+     * <pre>
+     * GET http://localhost:8080/system/dept/tree
+     * </pre>
      */
     @GetMapping("/tree")
-    public Result list(SysDept dept) {
+    public Result<List<SysDept>> tree(SysDept dept) {
         List<SysDept> depts = deptService.selectDeptList(dept);
         return Result.success(deptService.buildDeptTree(depts));
     }
 
-
     /**
-     * http://localhost:8080/system/dept/add
-     *{
-     *     "deptName": "科华支行",
-     *     "parentId": 105, //
-     *     "orderNum": 1
+     * 新增部门
+     * <p>
+     * 请求：POST /system/dept/add<br>
+     * Content-Type：application/json
+     * <p>
+     * 缓存策略：新增成功后删除 Redis 中的部门树/子部门 ID 缓存（非直接改缓存），
+     * 下次查询时从数据库重建，保证数据一致且实现简单。
+     * <p>
+     * 测试用例：
+     * <pre>
+     * POST http://localhost:8080/system/dept/add
+     * Body 示例：
+     * {
+     *   "deptName": "科华支行",
+     *   "parentId": 105,
+     *   "orderNum": 1
      * }
-     * 保存部门信息并更新缓存
-     * 1. 数据持久化到 MySQL 数据库，保证数据安全可靠
-     * 2. 删除 Redis 缓存，而非直接更新缓存
-     *
-     * 此处采用【删除缓存】而非【更新缓存】，原因如下：
-     * 1. 部门树是递归构建的复杂结构，若直接在缓存中更新节点，逻辑复杂、易出错
-     * 2. 删除缓存后，采用延迟加载（懒加载）策略：
-     *    下次查询时若缓存不存在，则从数据库查询最新全量数据，重新构建并回填缓存
-     * 3. 该方案实现简单、稳定性高，能保证缓存与数据库数据强一致
+     * </pre>
      */
     @PostMapping("/add")
-    public Result add(@RequestBody SysDept dept) {
-        Result result;
+    public Result<Void> add(@RequestBody SysDept dept) {
         int rows = deptService.insertDept(dept);
         if (rows > 0) {
-            // 新增了数据，就删除缓存
             deptService.clearDeptCache();
-            result = Result.success();
-        } else {
-            result = Result.error("新增失败");
+            return Result.success();
         }
-        return result;
+        return Result.error("新增失败");
     }
 }

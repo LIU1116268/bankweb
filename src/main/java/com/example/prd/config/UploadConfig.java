@@ -4,18 +4,21 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+/**
+ * 附件静态资源映射
+ * <p>
+ * 将本地磁盘路径映射为 HTTP 访问路径，便于预览已上传附件
+ */
 @Configuration
 public class UploadConfig implements WebMvcConfigurer {
 
     /**
-     * 映射本地文件路径到网络访问路径
-     * 例如：访问 http://localhost:8080/files/123.jpg
-     * 实际上是读取本地 D:/prd_attachments/123.jpg
+     * 访问示例：http://localhost:8080/files/2026/05/21/xxx.pdf
+     * <p>
+     * 对应本地：D:/prd_attachments/2026/05/21/xxx.pdf（需与 application.yml 中 file.upload-path 保持一致）
      */
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        // 这里的路径建议与 Controller 中的 uploadDir 保持一致
-        // 注意：Windows 路径前需要加 file:///，Linux 直接加 file:
         registry.addResourceHandler("/files/**")
                 .addResourceLocations("file:///D:/prd_attachments/");
     }

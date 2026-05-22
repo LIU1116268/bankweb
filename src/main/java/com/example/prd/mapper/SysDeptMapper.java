@@ -3,25 +3,28 @@ package com.example.prd.mapper;
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.example.prd.entity.SysDept;
 import org.apache.ibatis.annotations.*;
+
 import java.util.List;
 
+/**
+ * 组织架构（部门）- 数据访问层
+ */
 @Mapper
 public interface SysDeptMapper extends BaseMapper<SysDept> {
 
     /**
-     * 查询部门列表
-     *如果 IDE 报红，通常是因为它不认识 <script>。
+     * 条件查询部门列表（默认只查 status=0 正常部门）
      */
     @SuppressWarnings("SqlResolve")
     @Select("<script>" +
             "SELECT dept_id, parent_id, dept_name, order_num, status " +
             "FROM sys_dept " +
-            "<where> " +
-            "  <if test='deptName != null and deptName != \"\"'> " +
-            "    AND dept_name LIKE CONCAT('%', #{deptName}, '%') " +
-            "  </if> " +
-            "  AND status = '0' " +
-            "</where> " +
+            "<where>" +
+            "  <if test='deptName != null and deptName != \"\"'>" +
+            "    AND dept_name LIKE CONCAT('%', #{deptName}, '%')" +
+            "  </if>" +
+            "  AND status = '0'" +
+            "</where>" +
             "ORDER BY parent_id, order_num" +
             "</script>")
     @Results(id = "SysDeptMap", value = {
@@ -33,10 +36,6 @@ public interface SysDeptMapper extends BaseMapper<SysDept> {
     })
     List<SysDept> selectDeptList(SysDept dept);
 
-    /**
-     * 根据 ID 查询单个部门详情
-     * 将 FROM 后的 dept_id 改回 sys_dept
-     */
     @Select("SELECT dept_id, parent_id, dept_name, order_num, status FROM sys_dept WHERE dept_id = #{deptId}")
     @ResultMap("SysDeptMap")
     SysDept selectDeptById(Long deptId);
