@@ -59,4 +59,9 @@ public class Result<T> {
     public static <T> Result<T> tooManyRequests(String msg) {
         return error(429, msg);
     }
+
+    /** 无权限访问（对应 HTTP 403 语义） */
+    public static <T> Result<T> forbidden(String msg) {
+        return error(403, msg);
+    }
 }

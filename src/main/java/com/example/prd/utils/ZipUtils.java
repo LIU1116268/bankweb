@@ -57,4 +57,26 @@ public class ZipUtils {
             }
         }
     }
+
+    /**
+     * 打包到本地 ZIP 文件（异步导出任务写入磁盘后再下载）
+     */
+    public static void packToFile(List<File> files, File targetZip) throws IOException {
+        try (ZipOutputStream zos = new ZipOutputStream(new java.io.FileOutputStream(targetZip))) {
+            for (File file : files) {
+                if (!file.exists()) {
+                    continue;
+                }
+                zos.putNextEntry(new ZipEntry(file.getName()));
+                try (FileInputStream fis = new FileInputStream(file)) {
+                    byte[] buffer = new byte[1024];
+                    int len;
+                    while ((len = fis.read(buffer)) > 0) {
+                        zos.write(buffer, 0, len);
+                    }
+                }
+                zos.closeEntry();
+            }
+        }
+    }
 }

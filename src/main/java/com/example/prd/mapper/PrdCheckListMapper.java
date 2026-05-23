@@ -152,7 +152,29 @@ public interface PrdCheckListMapper extends BaseMapper<PrdCheckList> {
             @Param("limit") int limit);
 
     /**
-     * 全量条件查询（用于 Excel 导出，无 LIMIT）
+     * 全量条件查询（用于 Excel 导出，无 LIMIT；支持机构数据权限 deptIds 过滤）
+     */
+    @Select("<script>" +
+            "SELECT * FROM prd_check_list " +
+            "<where>" +
+            "  <if test='demandName != null and demandName != \"\"'>" +
+            "    AND DEMAND_NAME LIKE CONCAT('%', #{demandName}, '%')" +
+            "  </if>" +
+            "  <if test='deptIds != null and deptIds.size() > 0'>" +
+            "    AND DEPT_ID IN " +
+            "    <foreach collection='deptIds' item='id' open='(' separator=',' close=')'>" +
+            "      #{id}" +
+            "    </foreach>" +
+            "  </if>" +
+            "</where>" +
+            "ORDER BY CREATE_TIME DESC" +
+            "</script>")
+    @ResultMap("PrdMap")
+    List<PrdCheckList> selectAllForExport(@Param("demandName") String demandName,
+                                          @Param("deptIds") List<Long> deptIds);
+
+    /**
+     * 全量条件查询（同步导出兼容，不带机构过滤）
      */
     @Select("<script>" +
             "SELECT * FROM prd_check_list " +

@@ -70,13 +70,34 @@ public class RateLimitAspect {
 
     /** 首次使用时初始化速率；已存在配置则不再重复设置 */
     private void initRateLimiter(RRateLimiter limiter, RateLimit rateLimit) {
-        if (limiter.getConfig() == null) {
+        // 检查限流器是否已存在且配置有效
+        if (limiter.isExists()) {
+            // 如果已存在，尝试获取配置验证其有效性
+            try {
+                var config = limiter.getConfig();
+                if (config != null) {
+                    // 配置有效，无需重新初始化
+                    return;
+                }
+            } catch (Exception e) {
+                // 配置可能损坏，需要重新初始化
+                System.err.println("RateLimiter配置损坏，重新初始化: " + e.getMessage());
+            }
+        }
+        
+        // 限流器不存在或配置无效，重新初始化
+        try {
+            // 先删除可能存在的旧数据
+            limiter.delete();
+            // 使用 trySetRate 初始化
             limiter.trySetRate(
                     RateType.OVERALL,
                     rateLimit.rate(),
                     rateLimit.interval(),
                     toRateIntervalUnit(rateLimit.timeUnit())
             );
+        } catch (Exception e) {
+            System.err.println("RateLimiter初始化失败: " + e.getMessage());
         }
     }
 

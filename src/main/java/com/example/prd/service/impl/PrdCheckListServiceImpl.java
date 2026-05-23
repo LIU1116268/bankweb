@@ -1,14 +1,15 @@
 package com.example.prd.service.impl;
 
 import com.alibaba.excel.EasyExcel;
+import com.example.prd.context.DataScopeContext;
 import com.example.prd.dto.PrdStatusTransitionRequest;
 import com.example.prd.entity.PrdCheckList;
 import com.example.prd.enums.PrdCheckStatus;
 import com.example.prd.exception.PrdStatusException;
 import com.example.prd.mapper.PrdCheckListMapper;
+import com.example.prd.service.DataScopeService;
 import com.example.prd.service.PrdCheckListService;
 import com.example.prd.vo.PrdStatusTransitionVO;
-import com.example.prd.service.SysDeptService;
 import com.example.prd.utils.ZipUtils;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,7 +42,7 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
     private PrdCheckListMapper prdMapper;
 
     @Autowired
-    private SysDeptService sysDeptService;
+    private DataScopeService dataScopeService;
 
     @Value("${file.upload-path:D:/uploads/}")
     private String uploadRootPath;
@@ -61,8 +62,18 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
             if (entity.getStatus() == null || entity.getStatus().isBlank()) {
                 entity.setStatus(PrdCheckStatus.DRAFT.getCode());
             }
+            // 未传 deptId 时，默认归属当前用户机构（需请求头 X-Dept-Id）
+            if (entity.getDeptId() == null && DataScopeContext.isEnabled()) {
+                entity.setDeptId(DataScopeContext.getDeptId());
+            }
             return prdMapper.insertSelective(entity) > 0;
         }
+        // 更新前校验机构权限
+        PrdCheckList exist = prdMapper.selectByPrimaryKey(entity.getId());
+        if (exist == null) {
+            throw new RuntimeException("找不到 ID 为 [" + entity.getId() + "] 的数据记录");
+        }
+        dataScopeService.checkRecordAccess(exist);
         // 更新时禁止通过 save 接口直接改状态，避免绕过状态机
         entity.setStatus(null);
         return prdMapper.updateByPrimaryKeySelective(entity) > 0;
@@ -71,6 +82,7 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
     @Override
     public PrdCheckList getById(String id) {
         PrdCheckList record = prdMapper.selectByPrimaryKey(id);
+        dataScopeService.checkRecordAccess(record);
         fillStatusLabel(record);
         return record;
     }
@@ -99,6 +111,7 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
         if (exist == null) {
             throw new PrdStatusException("找不到 ID 为 [" + request.getId() + "] 的清单记录");
         }
+        dataScopeService.checkRecordAccess(exist);
 
         PrdCheckStatus current = resolveCurrentStatus(exist.getStatus());
         PrdCheckStatus target = PrdCheckStatus.fromCode(request.getTargetStatus());
@@ -143,6 +156,7 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
         if (exist == null) {
             throw new PrdStatusException("找不到 ID 为 [" + id + "] 的清单记录");
         }
+        dataScopeService.checkRecordAccess(exist);
         PrdCheckStatus current = resolveCurrentStatus(exist.getStatus());
 
         PrdStatusTransitionVO vo = new PrdStatusTransitionVO();
@@ -167,18 +181,8 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
     public List<PrdCheckList> selectCustomPage(
             int current, int size, String demandName, Long deptId, boolean recursive) {
         long offset = (long) (current - 1) * size;
-        List<Long> deptIds = null;
-
-        if (deptId != null) {
-            if (recursive) {
-                // 第一次会递归算子部门并写入 Redis，之后 24h 内直接走缓存，不再重复 DFS
-                deptIds = sysDeptService.selectChildrenIds(deptId);
-            } else {
-                // 非递归：只查当前部门
-                deptIds = new ArrayList<>();
-                deptIds.add(deptId);
-            }
-        }
+        // 机构数据权限：结合 X-Dept-Id 与可选 query deptId
+        List<Long> deptIds = dataScopeService.resolveDeptFilter(deptId, recursive);
         List<PrdCheckList> list = prdMapper.selectByCondition(demandName, deptIds, offset, size);
         list.forEach(this::fillStatusLabel);
         return list;
@@ -237,6 +241,7 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
         if (existRecord == null) {
             throw new RuntimeException("关联失败：找不到 ID 为 [" + id + "] 的数据记录");
         }
+        dataScopeService.checkRecordAccess(existRecord);
 
         // 路径合并：原有附件不覆盖，用逗号拼接
         String oldPath = existRecord.getAttachmentPath();
@@ -262,6 +267,7 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
         if (entity == null || entity.getAttachmentPath() == null || entity.getAttachmentPath().isEmpty()) {
             return true;
         }
+        dataScopeService.checkRecordAccess(entity);
 
         // 1. 物理删除磁盘文件（库中路径可能是 path1,path2）
         for (String p : entity.getAttachmentPath().split(",")) {
@@ -286,6 +292,7 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
     @Override
     public void exportAttachmentsAsZip(List<String> ids, HttpServletResponse response) throws IOException {
         List<File> allFiles = new ArrayList<>();
+        dataScopeService.checkRecordIdsAccess(ids);
         for (String id : ids) {
             PrdCheckList prd = prdMapper.selectByPrimaryKey(id);
             if (prd == null || prd.getAttachmentPath() == null) {
@@ -306,7 +313,8 @@ public class PrdCheckListServiceImpl implements PrdCheckListService {
      */
     @Override
     public void exportExcel(String demandName, HttpServletResponse response) throws IOException {
-        List<PrdCheckList> data = prdMapper.selectAll(demandName);
+        List<Long> deptIds = dataScopeService.resolveDeptFilter(null, true);
+        List<PrdCheckList> data = prdMapper.selectAllForExport(demandName, deptIds);
         for (PrdCheckList item : data) {
             item.setUatEnvCheck(transferCheckFlag(item.getUatEnvCheck()));
             item.setProdEnvCheck(transferCheckFlag(item.getProdEnvCheck()));

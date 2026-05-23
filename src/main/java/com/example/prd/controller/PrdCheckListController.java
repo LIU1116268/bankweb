@@ -5,7 +5,9 @@ import com.example.prd.annotation.RateLimit;
 import com.example.prd.common.Result;
 import com.example.prd.dto.PrdStatusTransitionRequest;
 import com.example.prd.entity.PrdCheckList;
+import com.example.prd.service.ExportTaskService;
 import com.example.prd.service.PrdCheckListService;
+import com.example.prd.vo.ExportTaskVO;
 import com.example.prd.vo.PrdStatusTransitionVO;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +30,9 @@ public class PrdCheckListController {
 
     @Autowired
     private PrdCheckListService prdService;
+
+    @Autowired
+    private ExportTaskService exportTaskService;
 
     // ==================== 数据维护 ====================
 
@@ -61,6 +66,12 @@ public class PrdCheckListController {
      * <p>
      * 注意：新增会写入 status=DRAFT，要求表 prd_check_list 已存在 STATUS 列，
      * 请先执行 {@code sql/prd_check_list_add_status.sql}，否则会报 500。
+     * <p>
+     * 机构数据权限（Apifox Headers）：
+     * <pre>
+     * X-Dept-Id: 101    （模拟四川省分行用户，新增记录默认归属该机构）
+     * X-User-Id: 104356 （可选，工号）
+     * </pre>
      */
     @Log(title = "核对清单", businessType = "SAVE")
     @PostMapping("/save")
@@ -178,6 +189,15 @@ public class PrdCheckListController {
      * 4. 只查该分行本级（不含下级）：
      *    GET http://localhost:8080/prd/list?deptId=101&amp;recursive=false
      * </pre>
+     * <p>
+     * 机构数据权限（Apifox 在 Headers 里加）：
+     * <pre>
+     * X-Dept-Id: 101   → 只能看四川省分行及下属支行数据
+     * X-Dept-Id: 102   → 只能看广东省分行及下属数据（与 101 结果不同）
+     * 不传 X-Dept-Id   → 不做机构过滤（看全量，便于本地调试）
+     * </pre>
+     * <p>
+     * 越权测试：Header 填 101，URL 加 deptId=102 → 应返回 code=403
      * <p>
      * 限流：同一 IP 每分钟最多 60 次
      */
@@ -325,6 +345,78 @@ public class PrdCheckListController {
             HttpServletResponse response) {
         try {
             prdService.exportExcel(demandName, response);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    // ==================== 异步导出 ====================
+
+    /**
+     * 异步导出 Excel（立即返回 taskId，后台生成文件）
+     * <p>
+     * 请求：GET /prd/exportExcel/async
+     * <p>
+     * Headers：建议带 X-Dept-Id，导出范围与列表机构权限一致
+     * <p>
+     * 测试流程：
+     * <pre>
+     * 1. GET  http://localhost:8080/prd/exportExcel/async
+     *    → 返回 taskId
+     * 2. GET  http://localhost:8080/prd/export/task/{taskId}
+     *    → 轮询 status 直到 DONE
+     * 3. GET  http://localhost:8080/prd/export/download/{taskId}
+     *    → 下载文件
+     * </pre>
+     */
+    @RateLimit(rate = 5, interval = 1, key = "exportExcelAsync")
+    @GetMapping("/exportExcel/async")
+    public Result<ExportTaskVO> exportExcelAsync(@RequestParam(required = false) String demandName) {
+        try {
+            return Result.success(exportTaskService.submitExcelAsync(demandName));
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 异步打包 ZIP
+     * <p>
+     * GET http://localhost:8080/prd/exportZip/async?ids={id1},{id2}
+     */
+    @RateLimit(rate = 5, interval = 1, key = "exportZipAsync")
+    @GetMapping("/exportZip/async")
+    public Result<ExportTaskVO> exportZipAsync(@RequestParam List<String> ids) {
+        try {
+            return Result.success(exportTaskService.submitZipAsync(ids));
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 查询异步导出任务状态
+     * <p>
+     * GET http://localhost:8080/prd/export/task/{taskId}
+     */
+    @GetMapping("/export/task/{taskId}")
+    public Result<ExportTaskVO> exportTaskStatus(@PathVariable String taskId) {
+        try {
+            return Result.success(exportTaskService.getTask(taskId));
+        } catch (RuntimeException e) {
+            return Result.error(e.getMessage());
+        }
+    }
+
+    /**
+     * 下载异步导出结果（仅 status=DONE 时可下载）
+     * <p>
+     * GET http://localhost:8080/prd/export/download/{taskId}
+     */
+    @GetMapping("/export/download/{taskId}")
+    public void exportDownload(@PathVariable String taskId, HttpServletResponse response) {
+        try {
+            exportTaskService.downloadTask(taskId, response);
         } catch (IOException e) {
             e.printStackTrace();
         }

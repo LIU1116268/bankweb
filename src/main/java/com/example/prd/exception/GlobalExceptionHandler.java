@@ -30,6 +30,11 @@ public class GlobalExceptionHandler {
     /**
      * 数据库异常（常见：未执行 STATUS 字段迁移脚本，报 Unknown column 'STATUS'）
      */
+    @ExceptionHandler(DataScopeException.class)
+    public Result<Void> handleDataScope(DataScopeException e) {
+        return Result.forbidden(e.getMessage());
+    }
+
     @ExceptionHandler(DataAccessException.class)
     public Result<Void> handleDataAccess(DataAccessException e) {
         String msg = e.getMostSpecificCause() != null
